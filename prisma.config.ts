@@ -9,6 +9,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Use Supabase's session pooler for schema migrations when it is available.
+    // Runtime database access will use DATABASE_URL in the application layer.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });
