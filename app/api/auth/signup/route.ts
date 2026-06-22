@@ -10,7 +10,8 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ message: parsed.error.issues[0]?.message }, { status: 400 });
 
   try {
-    const user = await db.user.create({ data: { ...parsed.data, email: parsed.data.email.toLowerCase(), passwordHash: await hash(parsed.data.password, 12) } });
+    const { password, ...profile } = parsed.data;
+    const user = await db.user.create({ data: { ...profile, email: profile.email.toLowerCase(), passwordHash: await hash(password, 12) } });
     const response = NextResponse.json({ user: { id: user.id, email: user.email, nickname: user.nickname } }, { status: 201 });
     response.cookies.set(sessionCookie(await createSession({ userId: user.id, email: user.email, nickname: user.nickname })));
     return response;

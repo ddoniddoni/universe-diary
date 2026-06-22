@@ -43,9 +43,9 @@ export async function requireUser(): Promise<SessionPayload> {
 }
 
 export function sessionCookie(token: string) {
-  return { name: COOKIE_NAME, value: token, options: { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_DURATION_SECONDS } };
+  return { name: COOKIE_NAME, value: token, httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_DURATION_SECONDS };
 }
 
 export function expiredSessionCookie() {
-  return { name: COOKIE_NAME, value: "", options: { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 } };
+  return { name: COOKIE_NAME, value: "", httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 };
 }
