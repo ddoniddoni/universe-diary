@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# universe-diary ✦
 
-## Getting Started
+하루의 기록이 별이 되고, 한 달의 기록이 은하수가 되는 감성 다이어리 웹 애플리케이션입니다.
 
-First, run the development server:
+> 기록으로 만드는 나만의 우주
+
+## 핵심 경험
+
+- 하루에 하나의 다이어리를 쓰면 감정에 맞는 별이 생성됩니다.
+- 내 우주에서 별을 눌러 그날의 기록을 다시 읽을 수 있습니다.
+- 한 달의 모든 날을 채우면 별들이 연결되어 은하수가 됩니다.
+
+## 기술 스택
+
+- Next.js App Router · TypeScript · Tailwind CSS
+- Prisma · PostgreSQL
+- 세션 기반 인증 (구현 예정)
+
+## 시작하기
 
 ```bash
+npm install
+Copy-Item .env.example .env
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 엽니다. 데이터베이스 연결 전 `.env`의 `DATABASE_URL`과 `SESSION_SECRET`을 설정하세요.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 품질 검사
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+npx prisma validate
+```
 
-## Learn More
+## 브랜치 정책
 
-To learn more about Next.js, take a look at the following resources:
+`develop`을 통합 브랜치로 사용합니다. 각 기능 또는 Phase 작업은 `develop`에서 전용 브랜치를 분기해 진행하며, `master`는 사용하지 않습니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+자세한 기능 범위와 구현 규칙은 [PRD.md](./PRD.md), [AGENTS.md](./AGENTS.md)를 참고하세요.
