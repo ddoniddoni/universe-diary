@@ -1,0 +1,2 @@
+import { requireUser } from "@/lib/auth";
+export default async function UniversePage() { const user = await requireUser(); return <main className="flex flex-1 items-center justify-center px-6"><section className="text-center"><p className="text-[#7BDFF2]">{user.nickname}님의 우주</p><h1 className="mt-3 text-4xl font-semibold">첫 번째 별을 기다리고 있어요.</h1><p className="mt-4 text-[#b8b8c8]">다이어리 기능은 다음 단계에서 이어집니다.</p></section></main>; }
