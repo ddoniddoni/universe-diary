@@ -92,6 +92,24 @@ function createStarField(count: number, spread: number, seed: string, texture: T
   return new THREE.Points(geometry, new THREE.PointsMaterial({ map: texture, size: 0.24, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
 }
 
+function createDiaryStarGeometry() {
+  const shape = new THREE.Shape();
+  const outerRadius = 0.62;
+  const innerRadius = 0.28;
+  for (let index = 0; index < 10; index += 1) {
+    const angle = -Math.PI / 2 + index * Math.PI / 5;
+    const radius = index % 2 === 0 ? outerRadius : innerRadius;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (index === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.15, bevelEnabled: true, bevelSegments: 2, bevelSize: 0.035, bevelThickness: 0.035 });
+  geometry.center();
+  return geometry;
+}
+
 export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -177,16 +195,19 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     ring.rotation.set(0.95, 0.18, -0.12);
     scene.add(ring);
 
-    const glowGeometry = new THREE.IcosahedronGeometry(0.45, 2);
+    const diaryStarGeometry = createDiaryStarGeometry();
     const pickableStars: THREE.Object3D[] = [];
+    const diaryStars: THREE.Mesh[] = [];
     for (const star of stars) {
       const position = starPosition(star);
-      const core = new THREE.Mesh(glowGeometry, new THREE.MeshBasicMaterial({ color: star.color }));
+      const core = new THREE.Mesh(diaryStarGeometry, new THREE.MeshBasicMaterial({ color: star.color }));
       core.position.copy(position);
+      core.rotation.z = seededNumber(`rotation-${star.id}`) * Math.PI * 2;
       core.userData.diaryId = star.diaryId;
       core.userData.title = star.title;
       core.scale.setScalar(0.85 + seededNumber(star.id) * 0.65);
       pickableStars.push(core);
+      diaryStars.push(core);
       scene.add(core);
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
@@ -261,6 +282,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       nearStars.rotation.y = -elapsed * 0.05;
       milkyWay.rotation.y = -0.55 + elapsed * 0.035;
       nebulae.rotation.z = elapsed * 0.018;
+      diaryStars.forEach((star, index) => { star.rotation.z += 0.0008 + (index % 3) * 0.00015; });
       planet.rotation.y += 0.00045;
       atmosphere.rotation.y += 0.0006;
       composer.render();
