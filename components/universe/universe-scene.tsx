@@ -100,13 +100,24 @@ function createPlanetSurfaceTexture(seed: string, baseColor: string, gasGiant: b
       context.ellipse(seededNumber(`${seed}-surface-x-${index}`) * canvas.width, seededNumber(`${seed}-surface-y-${index}`) * canvas.height, 2 + seededNumber(`${seed}-surface-w-${index}`) * 17, 1 + seededNumber(`${seed}-surface-h-${index}`) * 8, seededNumber(`${seed}-surface-r-${index}`) * Math.PI, 0, Math.PI * 2);
       context.fill();
     }
-    context.fillStyle = "rgba(225,240,255,.24)";
-    context.fillRect(0, 0, canvas.width, 12);
-    context.fillRect(0, canvas.height - 12, canvas.width, 12);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+function createAsteroidGeometry(seed: string, radius: number) {
+  const geometry = new THREE.IcosahedronGeometry(radius, 2);
+  const positions = geometry.getAttribute("position");
+  const vertex = new THREE.Vector3();
+  for (let index = 0; index < positions.count; index += 1) {
+    vertex.fromBufferAttribute(positions, index);
+    vertex.multiplyScalar(0.72 + seededNumber(`${seed}-roughness-${index}`) * 0.42);
+    positions.setXYZ(index, vertex.x, vertex.y, vertex.z);
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function createStarField(count: number, spread: number, seed: string) {
@@ -155,7 +166,7 @@ function createDeepSpaceSector(x: number, y: number) {
   const originX = x * sectorSize;
   const originY = y * sectorSize;
   const orbitPivots: THREE.Group[] = [];
-  const planetColors = ["#6387bc", "#d6a66a", "#b2728d", "#7c91a9", "#8a76c5", "#6eaa9a"];
+  const planetColors = ["#88796d", "#666775", "#9a8877", "#5f6b73", "#75685f", "#9a9a91"];
   const systemCount = 1 + Math.floor(seededNumber(`system-count-${x}-${y}`) * 2);
   for (let systemIndex = 0; systemIndex < systemCount; systemIndex += 1) {
     const systemX = originX + 5 + seededNumber(`system-x-${x}-${y}-${systemIndex}`) * (sectorSize - 10);
@@ -178,29 +189,11 @@ function createDeepSpaceSector(x: number, y: number) {
       const orbitRadius = 2.1 + planetIndex * 1.25 + seededNumber(`orbit-radius-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.7;
       const planetSize = 0.24 + seededNumber(`planet-size-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.5;
       const color = planetColors[Math.floor(seededNumber(`planet-color-${x}-${y}-${systemIndex}-${planetIndex}`) * planetColors.length)];
-      const gasGiant = planetSize > 0.31 || seededNumber(`planet-type-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.72;
-      const surfaceTexture = createPlanetSurfaceTexture(`planet-${x}-${y}-${systemIndex}-${planetIndex}`, color, gasGiant);
-      const planet = new THREE.Mesh(new THREE.SphereGeometry(planetSize, 24, 24), new THREE.MeshPhysicalMaterial({ map: surfaceTexture, roughness: gasGiant ? 0.48 : 0.84, metalness: 0.03, clearcoat: gasGiant ? 0.12 : 0.02 }));
+      const surfaceTexture = createPlanetSurfaceTexture(`asteroid-${x}-${y}-${systemIndex}-${planetIndex}`, color, false);
+      const planet = new THREE.Mesh(createAsteroidGeometry(`asteroid-${x}-${y}-${systemIndex}-${planetIndex}`, planetSize), new THREE.MeshStandardMaterial({ map: surfaceTexture, roughness: 0.96, metalness: 0.06 }));
       planet.position.x = orbitRadius;
       planet.userData.rotationSpeed = 0.0009 + seededNumber(`planet-spin-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.0014;
       orbit.add(planet);
-      if (!gasGiant) {
-        const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(planetSize * 1.035, 32, 32), new THREE.MeshPhongMaterial({ color: "#b8e8ff", transparent: true, opacity: 0.075, side: THREE.BackSide }));
-        planet.add(atmosphere);
-      }
-      if (seededNumber(`planet-ring-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.77) {
-        const planetRing = new THREE.Mesh(new THREE.RingGeometry(planetSize * 1.45, planetSize * 2.25, 32), new THREE.MeshBasicMaterial({ color: "#d9d0bd", transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
-        planetRing.rotation.x = Math.PI / 2.8;
-        planet.add(planetRing);
-      }
-      if (seededNumber(`planet-moon-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.58) {
-        const moonPivot = new THREE.Group();
-        const moon = new THREE.Mesh(new THREE.SphereGeometry(planetSize * 0.22, 16, 16), new THREE.MeshStandardMaterial({ color: "#a7a2ad", roughness: 0.9 }));
-        moon.position.x = planetSize * 2.1;
-        moonPivot.add(moon);
-        planet.add(moonPivot);
-        moonPivot.userData.rotationSpeed = 0.0018;
-      }
       sector.add(orbit);
       orbitPivots.push(orbit);
     }
@@ -237,7 +230,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
   function focusGalaxy(month: number) {
     if (!completedMonths.has(month)) return;
     galaxyFocusRef.current = { year: navigationYear, month };
-    requestedZoomRef.current = 17;
+    requestedZoomRef.current = 22;
     setSelectedMonth(month);
   }
 
@@ -262,7 +255,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.36, 0.5, 0.58));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.18, 0.42, 0.68));
 
     const glowTexture = createGlowTexture();
     const universe = new THREE.Group();
@@ -361,7 +354,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
       pickableStars.push(core);
       diaryStars.push(core);
       deepSpace.add(core);
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
       halo.userData.baseScale = 1.55;
       halo.scale.setScalar(halo.userData.baseScale as number);
@@ -443,7 +436,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.018, 15, 58);
+      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.018, 22, 50);
     };
     const onResize = () => { camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); composer.setSize(mount.clientWidth, mount.clientHeight); };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
