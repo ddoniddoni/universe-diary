@@ -38,12 +38,16 @@ function createGlowTexture() {
 
 function createPlanetSurfaceTexture(seed: string, baseColor: string, gasGiant: boolean) {
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
+  canvas.width = 512;
+  canvas.height = 256;
   const context = canvas.getContext("2d");
   if (!context) return new THREE.Texture();
   const base = new THREE.Color(baseColor);
-  context.fillStyle = base.getStyle();
+  const surfaceGradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  surfaceGradient.addColorStop(0, base.clone().offsetHSL(0, -0.08, 0.13).getStyle());
+  surfaceGradient.addColorStop(0.5, base.getStyle());
+  surfaceGradient.addColorStop(1, base.clone().offsetHSL(0, 0.05, -0.16).getStyle());
+  context.fillStyle = surfaceGradient;
   context.fillRect(0, 0, canvas.width, canvas.height);
   if (gasGiant) {
     for (let index = 0; index < 20; index += 1) {
@@ -54,7 +58,7 @@ function createPlanetSurfaceTexture(seed: string, baseColor: string, gasGiant: b
     }
     context.fillStyle = "rgba(30,20,35,.28)";
     context.beginPath();
-    context.ellipse(164, 76, 28, 9, -0.16, 0, Math.PI * 2);
+    context.ellipse(328, 152, 56, 18, -0.16, 0, Math.PI * 2);
     context.fill();
   } else {
     for (let index = 0; index < 38; index += 1) {
@@ -64,13 +68,16 @@ function createPlanetSurfaceTexture(seed: string, baseColor: string, gasGiant: b
       context.ellipse(seededNumber(`${seed}-surface-x-${index}`) * canvas.width, seededNumber(`${seed}-surface-y-${index}`) * canvas.height, 2 + seededNumber(`${seed}-surface-w-${index}`) * 17, 1 + seededNumber(`${seed}-surface-h-${index}`) * 8, seededNumber(`${seed}-surface-r-${index}`) * Math.PI, 0, Math.PI * 2);
       context.fill();
     }
+    context.fillStyle = "rgba(225,240,255,.24)";
+    context.fillRect(0, 0, canvas.width, 12);
+    context.fillRect(0, canvas.height - 12, canvas.width, 12);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
-function createStarField(count: number, spread: number, seed: string, texture: THREE.Texture) {
+function createStarField(count: number, spread: number, seed: string) {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const color = new THREE.Color();
@@ -89,7 +96,7 @@ function createStarField(count: number, spread: number, seed: string, texture: T
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  return new THREE.Points(geometry, new THREE.PointsMaterial({ map: texture, size: 0.24, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
+  return new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.14, vertexColors: true, transparent: true, opacity: 0.66, depthWrite: false }));
 }
 
 function createDiaryStarGeometry() {
@@ -110,7 +117,7 @@ function createDiaryStarGeometry() {
   return geometry;
 }
 
-function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture) {
+function createDeepSpaceSector(x: number, y: number) {
   const sector = new THREE.Group();
   const sectorSize = 42;
   const originX = x * sectorSize;
@@ -124,13 +131,9 @@ function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture)
     const systemZ = -10 - seededNumber(`system-z-${x}-${y}-${systemIndex}`) * 14;
     const sunColor = new THREE.Color().setHSL(0.06 + seededNumber(`sun-color-${x}-${y}-${systemIndex}`) * 0.1, 0.85, 0.65);
     const sunSize = 0.48 + seededNumber(`sun-size-${x}-${y}-${systemIndex}`) * 0.72;
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(sunSize, 20, 20), new THREE.MeshBasicMaterial({ color: sunColor }));
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(sunSize, 32, 32), new THREE.MeshStandardMaterial({ color: sunColor, roughness: 0.62, metalness: 0.05 }));
     sun.position.set(systemX, systemY, systemZ);
     sector.add(sun);
-    const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: sunColor, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false }));
-    corona.position.copy(sun.position);
-    corona.scale.setScalar(sunSize * 3.6);
-    sector.add(corona);
     const sunlight = new THREE.PointLight(sunColor, 3.2, 18);
     sunlight.position.copy(sun.position);
     sector.add(sunlight);
@@ -141,7 +144,7 @@ function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture)
       orbit.rotation.x = 0.2 + seededNumber(`orbit-tilt-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.5;
       orbit.rotation.z = seededNumber(`orbit-phase-${x}-${y}-${systemIndex}-${planetIndex}`) * Math.PI * 2;
       const orbitRadius = 2.1 + planetIndex * 1.25 + seededNumber(`orbit-radius-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.7;
-      const planetSize = 0.12 + seededNumber(`planet-size-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.32;
+      const planetSize = 0.24 + seededNumber(`planet-size-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.5;
       const color = planetColors[Math.floor(seededNumber(`planet-color-${x}-${y}-${systemIndex}-${planetIndex}`) * planetColors.length)];
       const gasGiant = planetSize > 0.31 || seededNumber(`planet-type-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.72;
       const surfaceTexture = createPlanetSurfaceTexture(`planet-${x}-${y}-${systemIndex}-${planetIndex}`, color, gasGiant);
@@ -150,13 +153,21 @@ function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture)
       planet.userData.rotationSpeed = 0.0009 + seededNumber(`planet-spin-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.0014;
       orbit.add(planet);
       if (!gasGiant) {
-        const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(planetSize * 1.045, 24, 24), new THREE.MeshBasicMaterial({ color: "#b8e8ff", transparent: true, opacity: 0.08, side: THREE.BackSide, blending: THREE.AdditiveBlending }));
+        const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(planetSize * 1.035, 32, 32), new THREE.MeshPhongMaterial({ color: "#b8e8ff", transparent: true, opacity: 0.075, side: THREE.BackSide }));
         planet.add(atmosphere);
       }
       if (seededNumber(`planet-ring-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.77) {
         const planetRing = new THREE.Mesh(new THREE.RingGeometry(planetSize * 1.45, planetSize * 2.25, 32), new THREE.MeshBasicMaterial({ color: "#d9d0bd", transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
         planetRing.rotation.x = Math.PI / 2.8;
         planet.add(planetRing);
+      }
+      if (seededNumber(`planet-moon-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.58) {
+        const moonPivot = new THREE.Group();
+        const moon = new THREE.Mesh(new THREE.SphereGeometry(planetSize * 0.22, 16, 16), new THREE.MeshStandardMaterial({ color: "#a7a2ad", roughness: 0.9 }));
+        moon.position.x = planetSize * 2.1;
+        moonPivot.add(moon);
+        planet.add(moonPivot);
+        moonPivot.userData.rotationSpeed = 0.0018;
       }
       sector.add(orbit);
       orbitPivots.push(orbit);
@@ -211,9 +222,9 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     const glowTexture = createGlowTexture();
     const universe = new THREE.Group();
     scene.add(universe);
-    const farStars = createStarField(2800, 105, "far", glowTexture);
-    const nearStars = createStarField(850, 55, "near", glowTexture);
-    nearStars.material.size = 0.34;
+    const farStars = createStarField(2800, 105, "far");
+    const nearStars = createStarField(850, 55, "near");
+    nearStars.material.size = 0.2;
     universe.add(farStars, nearStars);
 
     const milkyWay = new THREE.Group();
@@ -234,7 +245,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     const milkyGeometry = new THREE.BufferGeometry();
     milkyGeometry.setAttribute("position", new THREE.BufferAttribute(milkyPositions, 3));
     milkyGeometry.setAttribute("color", new THREE.BufferAttribute(milkyColors, 3));
-    milkyWay.add(new THREE.Points(milkyGeometry, new THREE.PointsMaterial({ map: glowTexture, size: 0.42, vertexColors: true, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending })));
+    milkyWay.add(new THREE.Points(milkyGeometry, new THREE.PointsMaterial({ size: 0.22, vertexColors: true, transparent: true, opacity: 0.25, depthWrite: false })));
     milkyWay.rotation.set(0.45, -0.55, -0.26);
     universe.add(milkyWay);
 
@@ -270,7 +281,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
           const key = `${sectorX}:${sectorY}`;
           wanted.add(key);
           if (sectors.has(key)) continue;
-          const sector = createDeepSpaceSector(sectorX, sectorY, glowTexture);
+          const sector = createDeepSpaceSector(sectorX, sectorY);
           sectors.set(key, sector);
           (sector.userData.orbitPivots as THREE.Group[]).forEach((orbit) => orbitPivots.add(orbit));
           deepSpace.add(sector);
@@ -382,7 +393,12 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       orbitPivots.forEach((orbit) => {
         orbit.rotation.z += 0.0007 + (orbitIndex % 5) * 0.00013;
         const planet = orbit.children.find((child) => child instanceof THREE.Mesh);
-        if (planet) planet.rotation.y += planet.userData.rotationSpeed as number;
+        if (planet) {
+          planet.rotation.y += planet.userData.rotationSpeed as number;
+          planet.children.forEach((child) => {
+            if (child instanceof THREE.Group) child.rotation.y += child.userData.rotationSpeed as number;
+          });
+        }
         orbitIndex += 1;
       });
       composer.render();
