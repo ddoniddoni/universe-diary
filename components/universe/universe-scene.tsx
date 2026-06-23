@@ -3,6 +3,9 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
 type SceneStar = { id: string; diaryId: string; title: string; diaryDate: string; color: string; x: number; y: number };
 type Galaxy = { id: string; year: number; month: number };
@@ -14,7 +17,79 @@ function seededNumber(value: string) {
 }
 
 function starPosition(star: SceneStar) {
-  return new THREE.Vector3(star.x / 180, -star.y / 180, (seededNumber(star.id) - 0.5) * 10);
+  return new THREE.Vector3(star.x / 180, -star.y / 180, (seededNumber(star.id) - 0.5) * 11);
+}
+
+function createGlowTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.Texture();
+  const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.08, "rgba(225,235,255,.95)");
+  gradient.addColorStop(0.28, "rgba(140,180,255,.35)");
+  gradient.addColorStop(1, "rgba(80,100,255,0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createPlanetTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 768;
+  canvas.height = 384;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.Texture();
+  const ocean = context.createLinearGradient(0, 0, 768, 384);
+  ocean.addColorStop(0, "#07102d");
+  ocean.addColorStop(0.42, "#155065");
+  ocean.addColorStop(0.75, "#103049");
+  ocean.addColorStop(1, "#080b22");
+  context.fillStyle = ocean;
+  context.fillRect(0, 0, 768, 384);
+  for (let index = 0; index < 230; index += 1) {
+    const x = seededNumber(`land-x-${index}`) * 768;
+    const y = seededNumber(`land-y-${index}`) * 384;
+    const width = 12 + seededNumber(`land-w-${index}`) * 95;
+    const height = 4 + seededNumber(`land-h-${index}`) * 28;
+    context.fillStyle = index % 3 === 0 ? "rgba(89,132,106,.48)" : "rgba(41,102,94,.42)";
+    context.beginPath();
+    context.ellipse(x, y, width, height, seededNumber(`land-r-${index}`) * Math.PI, 0, Math.PI * 2);
+    context.fill();
+  }
+  for (let index = 0; index < 110; index += 1) {
+    context.fillStyle = `rgba(210,235,255,${0.025 + seededNumber(`cloud-${index}`) * 0.09})`;
+    context.beginPath();
+    context.ellipse(seededNumber(`cloud-x-${index}`) * 768, seededNumber(`cloud-y-${index}`) * 384, 35 + seededNumber(`cloud-w-${index}`) * 120, 2 + seededNumber(`cloud-h-${index}`) * 8, 0, 0, Math.PI * 2);
+    context.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function createStarField(count: number, spread: number, seed: string, texture: THREE.Texture) {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const color = new THREE.Color();
+  for (let index = 0; index < count; index += 1) {
+    const radius = spread * (0.25 + seededNumber(`${seed}-r-${index}`) * 0.75);
+    const theta = seededNumber(`${seed}-t-${index}`) * Math.PI * 2;
+    const phi = Math.acos(1 - seededNumber(`${seed}-p-${index}`) * 2);
+    positions[index * 3] = radius * Math.sin(phi) * Math.cos(theta);
+    positions[index * 3 + 1] = radius * Math.cos(phi);
+    positions[index * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta) - 35;
+    color.setHSL(0.55 + seededNumber(`${seed}-c-${index}`) * 0.13, 0.38, 0.62 + seededNumber(`${seed}-l-${index}`) * 0.34);
+    colors[index * 3] = color.r;
+    colors[index * 3 + 1] = color.g;
+    colors[index * 3 + 2] = color.b;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  return new THREE.Points(geometry, new THREE.PointsMaterial({ map: texture, size: 0.24, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
 }
 
 export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
@@ -26,73 +101,111 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     if (!mount) return;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2("#02030b", 0.017);
-    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 1000);
-    camera.position.set(0, 1.5, 31);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    scene.background = new THREE.Color("#01020a");
+    scene.fog = new THREE.FogExp2("#01020a", 0.012);
+    const camera = new THREE.PerspectiveCamera(52, mount.clientWidth / mount.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0.5, 32);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
     renderer.domElement.setAttribute("aria-label", "나의 3D 우주. 별을 클릭하면 해당 다이어리를 볼 수 있습니다.");
     renderer.domElement.className = "h-full w-full touch-none";
     mount.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight("#8d9dff", 0.7));
-    const keyLight = new THREE.PointLight("#b8a1ff", 18, 70);
-    keyLight.position.set(-12, 8, 15);
-    scene.add(keyLight);
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 1.15, 0.85, 0.2));
 
-    const random = (index: number) => seededNumber(`sky-${index}`);
-    const field = new Float32Array(1800 * 3);
-    for (let index = 0; index < 1800; index += 1) {
-      field[index * 3] = (random(index) - 0.5) * 150;
-      field[index * 3 + 1] = (random(index + 3000) - 0.5) * 100;
-      field[index * 3 + 2] = -20 - random(index + 6000) * 120;
+    const glowTexture = createGlowTexture();
+    const planetTexture = createPlanetTexture();
+    const universe = new THREE.Group();
+    scene.add(universe);
+    const farStars = createStarField(2800, 105, "far", glowTexture);
+    const nearStars = createStarField(850, 55, "near", glowTexture);
+    nearStars.material.size = 0.34;
+    universe.add(farStars, nearStars);
+
+    const milkyWay = new THREE.Group();
+    const milkyPositions = new Float32Array(2200 * 3);
+    const milkyColors = new Float32Array(2200 * 3);
+    const milkyColor = new THREE.Color();
+    for (let index = 0; index < 2200; index += 1) {
+      const angle = seededNumber(`milky-angle-${index}`) * Math.PI * 2;
+      const radius = 12 + seededNumber(`milky-radius-${index}`) * 54;
+      milkyPositions[index * 3] = Math.cos(angle) * radius;
+      milkyPositions[index * 3 + 1] = (seededNumber(`milky-height-${index}`) - 0.5) * (2 + radius * 0.055);
+      milkyPositions[index * 3 + 2] = Math.sin(angle) * radius - 28;
+      milkyColor.setHSL(0.62 + seededNumber(`milky-color-${index}`) * 0.1, 0.5, 0.55 + seededNumber(`milky-light-${index}`) * 0.35);
+      milkyColors[index * 3] = milkyColor.r;
+      milkyColors[index * 3 + 1] = milkyColor.g;
+      milkyColors[index * 3 + 2] = milkyColor.b;
     }
-    const skyGeometry = new THREE.BufferGeometry();
-    skyGeometry.setAttribute("position", new THREE.BufferAttribute(field, 3));
-    const sky = new THREE.Points(skyGeometry, new THREE.PointsMaterial({ color: "#d9e6ff", size: 0.11, transparent: true, opacity: 0.8, depthWrite: false }));
-    scene.add(sky);
+    const milkyGeometry = new THREE.BufferGeometry();
+    milkyGeometry.setAttribute("position", new THREE.BufferAttribute(milkyPositions, 3));
+    milkyGeometry.setAttribute("color", new THREE.BufferAttribute(milkyColors, 3));
+    milkyWay.add(new THREE.Points(milkyGeometry, new THREE.PointsMaterial({ map: glowTexture, size: 0.42, vertexColors: true, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending })));
+    milkyWay.rotation.set(0.45, -0.55, -0.26);
+    universe.add(milkyWay);
 
-    const planet = new THREE.Mesh(
-      new THREE.SphereGeometry(4.9, 48, 48),
-      new THREE.MeshStandardMaterial({ color: "#182254", roughness: 0.7, metalness: 0.3, emissive: "#080d2c", emissiveIntensity: 1.5 }),
-    );
-    planet.position.set(15, -9, -16);
+    const nebulae = new THREE.Group();
+    const nebulaPalette = ["#4b2385", "#1e609a", "#9d2b66", "#2d4f9a", "#6930a0"];
+    for (let index = 0; index < 18; index += 1) {
+      const material = new THREE.SpriteMaterial({ map: glowTexture, color: nebulaPalette[index % nebulaPalette.length], transparent: true, opacity: 0.08 + seededNumber(`nebula-opacity-${index}`) * 0.11, blending: THREE.AdditiveBlending, depthWrite: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.position.set((seededNumber(`nebula-x-${index}`) - 0.5) * 75, (seededNumber(`nebula-y-${index}`) - 0.5) * 32, -38 - seededNumber(`nebula-z-${index}`) * 30);
+      const scale = 15 + seededNumber(`nebula-scale-${index}`) * 22;
+      sprite.scale.set(scale * 1.8, scale, 1);
+      nebulae.add(sprite);
+    }
+    universe.add(nebulae);
+
+    scene.add(new THREE.HemisphereLight("#9bb8ff", "#03040e", 1.35));
+    const sunlight = new THREE.DirectionalLight("#b8d5ff", 3.6);
+    sunlight.position.set(-18, 13, 20);
+    scene.add(sunlight);
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(7.4, 64, 64), new THREE.MeshPhysicalMaterial({ map: planetTexture, roughness: 0.75, metalness: 0.12, clearcoat: 0.15, clearcoatRoughness: 0.7 }));
+    planet.position.set(16, -9, -20);
     scene.add(planet);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.075, 12, 100), new THREE.MeshBasicMaterial({ color: "#9f87e8", transparent: true, opacity: 0.5 }));
+    const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(7.62, 64, 64), new THREE.MeshBasicMaterial({ color: "#4bc5ff", transparent: true, opacity: 0.13, side: THREE.BackSide, blending: THREE.AdditiveBlending }));
+    atmosphere.position.copy(planet.position);
+    scene.add(atmosphere);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(9.2, 9.35, 128), new THREE.MeshBasicMaterial({ color: "#9eb8ff", transparent: true, opacity: 0.42, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     ring.position.copy(planet.position);
-    ring.rotation.x = Math.PI / 2.45;
+    ring.rotation.set(0.95, 0.18, -0.12);
     scene.add(ring);
 
-    const glowGeometry = new THREE.IcosahedronGeometry(0.42, 2);
+    const glowGeometry = new THREE.IcosahedronGeometry(0.45, 2);
     const pickableStars: THREE.Object3D[] = [];
     for (const star of stars) {
-      const material = new THREE.MeshBasicMaterial({ color: star.color });
-      const glow = new THREE.Mesh(glowGeometry, material);
-      glow.position.copy(starPosition(star));
-      glow.userData.diaryId = star.diaryId;
-      glow.userData.title = star.title;
-      glow.scale.setScalar(0.8 + seededNumber(star.id) * 0.6);
-      pickableStars.push(glow);
-      scene.add(glow);
-      const halo = new THREE.PointLight(star.color, 2.2, 7);
-      halo.position.copy(glow.position);
+      const position = starPosition(star);
+      const core = new THREE.Mesh(glowGeometry, new THREE.MeshBasicMaterial({ color: star.color }));
+      core.position.copy(position);
+      core.userData.diaryId = star.diaryId;
+      core.userData.title = star.title;
+      core.scale.setScalar(0.85 + seededNumber(star.id) * 0.65);
+      pickableStars.push(core);
+      scene.add(core);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
+      halo.position.copy(position);
+      halo.scale.setScalar(3.2);
       scene.add(halo);
+      const light = new THREE.PointLight(star.color, 2.5, 9);
+      light.position.copy(position);
+      scene.add(light);
     }
 
     for (const galaxy of galaxies) {
-      const points = stars
-        .filter((star) => {
-          const date = new Date(star.diaryDate);
-          return date.getUTCFullYear() === galaxy.year && date.getUTCMonth() + 1 === galaxy.month;
-        })
-        .sort((left, right) => left.diaryDate.localeCompare(right.diaryDate))
-        .map(starPosition);
+      const points = stars.filter((star) => {
+        const date = new Date(star.diaryDate);
+        return date.getUTCFullYear() === galaxy.year && date.getUTCMonth() + 1 === galaxy.month;
+      }).sort((left, right) => left.diaryDate.localeCompare(right.diaryDate)).map(starPosition);
       if (points.length < 2) continue;
       const curve = new THREE.CatmullRomCurve3(points);
-      const lineGeometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(24, points.length * 12)));
-      scene.add(new THREE.Line(lineGeometry, new THREE.LineBasicMaterial({ color: "#b8a1ff", transparent: true, opacity: 0.68 })));
+      const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(32, points.length * 14)));
+      scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#d0bbff", transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending })));
     }
 
     const raycaster = new THREE.Raycaster();
@@ -104,7 +217,6 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     let startX = 0;
     let startY = 0;
     let moved = false;
-
     const setPointer = (event: PointerEvent) => {
       const bounds = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
@@ -112,6 +224,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       raycaster.setFromCamera(pointer, camera);
       hovered = raycaster.intersectObjects(pickableStars, false)[0];
       renderer.domElement.style.cursor = hovered ? "pointer" : dragging ? "grabbing" : "grab";
+      renderer.domElement.title = hovered?.object.userData.title as string ?? "드래그해서 우주를 둘러보고, 별을 클릭해 기록을 만나보세요";
     };
     const onPointerDown = (event: PointerEvent) => { dragging = true; moved = false; startX = event.clientX; startY = event.clientY; renderer.domElement.setPointerCapture(event.pointerId); setPointer(event); };
     const onPointerMove = (event: PointerEvent) => {
@@ -131,7 +244,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       renderer.domElement.style.cursor = hovered ? "pointer" : "grab";
       renderer.domElement.releasePointerCapture(event.pointerId);
     };
-    const onResize = () => { camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
+    const onResize = () => { camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); composer.setSize(mount.clientWidth, mount.clientHeight); };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
@@ -140,14 +253,17 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     let frame = 0;
     const animate = () => {
       frame = requestAnimationFrame(animate);
-      const elapsed = performance.now() * 0.00012;
-      camera.position.x = Math.sin(elapsed + yaw) * 3.5;
-      camera.position.y = 1.5 + pitch * 8;
-      camera.lookAt(0, 0, -3);
-      sky.rotation.y = elapsed * 0.2;
-      planet.rotation.y += 0.0008;
-      ring.rotation.z += 0.0004;
-      renderer.render(scene, camera);
+      const elapsed = performance.now() * 0.00008;
+      camera.position.x = Math.sin(elapsed + yaw) * 4.1;
+      camera.position.y = 0.5 + pitch * 8;
+      camera.lookAt(0, 0, -4);
+      farStars.rotation.y = elapsed * 0.14;
+      nearStars.rotation.y = -elapsed * 0.05;
+      milkyWay.rotation.y = -0.55 + elapsed * 0.035;
+      nebulae.rotation.z = elapsed * 0.018;
+      planet.rotation.y += 0.00045;
+      atmosphere.rotation.y += 0.0006;
+      composer.render();
     };
     animate();
 
@@ -163,7 +279,11 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
           const materials = Array.isArray(object.material) ? object.material : [object.material];
           materials.forEach((material) => material.dispose());
         }
+        if (object instanceof THREE.Sprite) object.material.dispose();
       });
+      glowTexture.dispose();
+      planetTexture.dispose();
+      composer.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
