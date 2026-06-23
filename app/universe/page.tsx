@@ -57,6 +57,9 @@ export default async function UniversePage() {
           )}
         </div>
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#080b20]/65 p-2 shadow-2xl backdrop-blur-xl">
+          <Link href="/diaries" className="rounded-xl px-3 py-2 text-sm text-[#d8d9e8] transition hover:bg-white/10 hover:text-white">
+            목록으로 보기
+          </Link>
           <Link href="/" className="rounded-xl px-3 py-2 text-sm text-[#d8d9e8] transition hover:bg-white/10 hover:text-white">
             메인으로
           </Link>
