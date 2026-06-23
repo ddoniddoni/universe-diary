@@ -50,6 +50,11 @@ export default async function UniversePage() {
         <div className="rounded-2xl border border-white/10 bg-[#080b20]/65 px-4 py-3 shadow-2xl backdrop-blur-xl sm:px-5">
           <p className="text-xs font-medium tracking-[0.24em] text-[#7bdff2]">MY UNIVERSE</p>
           <h1 className="mt-1 text-lg font-semibold text-white sm:text-xl">{user.nickname}님의 우주</h1>
+          {galaxies.length > 0 && (
+            <p className="mt-2 text-xs text-[#c9b8ff]">
+              ✦ {galaxies[0].year}년 {galaxies[0].month}월의 은하수 완성
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#080b20]/65 p-2 shadow-2xl backdrop-blur-xl">
           <Link href="/" className="rounded-xl px-3 py-2 text-sm text-[#d8d9e8] transition hover:bg-white/10 hover:text-white">

@@ -327,8 +327,23 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       }).sort((left, right) => left.diaryDate.localeCompare(right.diaryDate)).map(starPosition);
       if (points.length < 2) continue;
       const curve = new THREE.CatmullRomCurve3(points);
-      const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(32, points.length * 14)));
-      deepSpace.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#d0bbff", transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending })));
+      const ribbon = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, Math.max(80, points.length * 7), 0.065, 8, false),
+        new THREE.MeshBasicMaterial({ color: "#b8a1ff", transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      deepSpace.add(ribbon);
+
+      const dustPositions = new Float32Array(520 * 3);
+      const sampled = curve.getPoints(180);
+      for (let index = 0; index < 520; index += 1) {
+        const base = sampled[Math.floor(seededNumber(`${galaxy.id}-dust-path-${index}`) * sampled.length)];
+        dustPositions[index * 3] = base.x + (seededNumber(`${galaxy.id}-dust-x-${index}`) - 0.5) * 1.5;
+        dustPositions[index * 3 + 1] = base.y + (seededNumber(`${galaxy.id}-dust-y-${index}`) - 0.5) * 0.72;
+        dustPositions[index * 3 + 2] = base.z + (seededNumber(`${galaxy.id}-dust-z-${index}`) - 0.5) * 1.6;
+      }
+      const dustGeometry = new THREE.BufferGeometry();
+      dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+      deepSpace.add(new THREE.Points(dustGeometry, new THREE.PointsMaterial({ size: 0.065, color: "#d8ccff", transparent: true, opacity: 0.45, depthWrite: false })));
     }
 
     const raycaster = new THREE.Raycaster();
