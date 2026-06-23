@@ -21,10 +21,10 @@ const colors = {
 function spiralPosition(day) {
   const progress = (day - 1) / 30;
   const angle = progress * Math.PI * 2.8;
-  const radius = 760 + progress * 1850;
+  const radius = 220 + progress * 1050;
   return {
-    x: Math.round(-350 + Math.cos(angle) * radius),
-    y: Math.round(260 + Math.sin(angle) * radius * 0.62),
+    x: Math.round(2425 + Math.cos(angle) * radius),
+    y: Math.round(1050 + Math.sin(angle) * radius * 0.62),
   };
 }
 
