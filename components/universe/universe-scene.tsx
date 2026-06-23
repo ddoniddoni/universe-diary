@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -9,6 +9,9 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 
 type SceneStar = { id: string; diaryId: string; title: string; diaryDate: string; color: string; x: number; y: number };
 type Galaxy = { id: string; year: number; month: number };
+type HoveredStar = { title: string; diaryDate: string; x: number; y: number };
+
+const dateLabelFormatter = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" });
 
 function seededNumber(value: string) {
   let hash = 2166136261;
@@ -195,6 +198,7 @@ function disposeDeepSpaceSector(sector: THREE.Group) {
 export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const [hoveredStar, setHoveredStar] = useState<HoveredStar | null>(null);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -306,6 +310,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       core.rotation.z = seededNumber(`rotation-${star.id}`) * Math.PI * 2;
       core.userData.diaryId = star.diaryId;
       core.userData.title = star.title;
+      core.userData.diaryDate = star.diaryDate;
       core.scale.setScalar(0.85 + seededNumber(star.id) * 0.65);
       pickableStars.push(core);
       diaryStars.push(core);
@@ -354,6 +359,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     let startX = 0;
     let startY = 0;
     let moved = false;
+    let focusedDiaryId: string | null = null;
     const setPointer = (event: PointerEvent) => {
       const bounds = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
@@ -361,7 +367,17 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       raycaster.setFromCamera(pointer, camera);
       hovered = raycaster.intersectObjects(pickableStars, false)[0];
       renderer.domElement.style.cursor = hovered ? "pointer" : dragging ? "grabbing" : "grab";
-      renderer.domElement.title = hovered?.object.userData.title as string ?? "드래그해서 우주를 둘러보고, 별을 클릭해 기록을 만나보세요";
+      const diaryId = hovered?.object.userData.diaryId as string | undefined;
+      if (diaryId !== focusedDiaryId) {
+        focusedDiaryId = diaryId ?? null;
+        setHoveredStar(hovered ? {
+          title: hovered.object.userData.title as string,
+          diaryDate: hovered.object.userData.diaryDate as string,
+          x: event.clientX - bounds.left,
+          y: event.clientY - bounds.top,
+        } : null);
+      }
+      renderer.domElement.title = hovered ? `${dateLabelFormatter.format(new Date(hovered.object.userData.diaryDate as string))} · ${hovered.object.userData.title as string}` : "드래그해서 우주를 둘러보고, 별을 클릭해 기록을 만나보세요";
     };
     const onPointerDown = (event: PointerEvent) => { dragging = true; moved = false; startX = event.clientX; startY = event.clientY; renderer.domElement.setPointerCapture(event.pointerId); setPointer(event); };
     const onPointerMove = (event: PointerEvent) => {
@@ -446,5 +462,18 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     };
   }, [galaxies, router, stars]);
 
-  return <div ref={mountRef} className="absolute inset-0" />;
+  return (
+    <div className="absolute inset-0">
+      <div ref={mountRef} className="absolute inset-0" />
+      {hoveredStar && (
+        <div
+          className="pointer-events-none absolute z-20 max-w-56 -translate-y-full rounded-xl border border-white/15 bg-[#0a0d22]/90 px-3 py-2 text-left shadow-xl backdrop-blur-md"
+          style={{ left: hoveredStar.x + 14, top: hoveredStar.y - 10 }}
+        >
+          <p className="text-xs font-medium text-[#ffd166]">{dateLabelFormatter.format(new Date(hoveredStar.diaryDate))}</p>
+          <p className="mt-0.5 truncate text-xs text-white">{hoveredStar.title}</p>
+        </div>
+      )}
+    </div>
+  );
 }
