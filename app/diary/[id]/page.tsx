@@ -14,11 +14,7 @@ export default async function DiaryDetail({ params }: { params: Promise<{ id: st
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-2xl items-center px-6 py-12">
       <article className="w-full rounded-3xl border border-white/10 bg-[#0b1026]/80 p-8 shadow-2xl">
-        <div className="flex flex-wrap gap-4 text-sm">
-          <Link href="/diaries" className="text-[#7bdff2] transition hover:text-white">목록으로 보기</Link>
-          <Link href="/universe" className="text-[#b8b8c8] transition hover:text-white">우주로 보기</Link>
-        </div>
-        <p className="mt-8 text-sm" style={{ color: diary.star?.color }}>{emotionLabels[diary.emotion]}</p>
+        <p className="text-sm" style={{ color: diary.star?.color }}>{emotionLabels[diary.emotion]}</p>
         <h1 className="mt-2 text-3xl font-semibold">{diary.title}</h1>
         <time className="mt-2 block text-sm text-[#b8b8c8]">{diary.diaryDate.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric" })}</time>
         <p className="mt-8 whitespace-pre-wrap leading-8 text-[#e8e8f0]">{diary.content}</p>
