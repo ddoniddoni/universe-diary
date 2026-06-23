@@ -197,8 +197,18 @@ function disposeDeepSpaceSector(sector: THREE.Group) {
 
 export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const galaxyFocusRef = useRef<{ year: number; month: number } | null>(null);
   const router = useRouter();
   const [hoveredStar, setHoveredStar] = useState<HoveredStar | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const navigationYear = galaxies.reduce((latest, galaxy) => Math.max(latest, galaxy.year), new Date().getUTCFullYear());
+  const completedMonths = new Set(galaxies.filter((galaxy) => galaxy.year === navigationYear).map((galaxy) => galaxy.month));
+
+  function focusGalaxy(month: number) {
+    if (!completedMonths.has(month)) return;
+    galaxyFocusRef.current = { year: navigationYear, month };
+    setSelectedMonth(month);
+  }
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -273,6 +283,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     scene.add(deepSpace);
     const sectors = new Map<string, THREE.Group>();
     const orbitPivots = new Set<THREE.Group>();
+    const galaxyTargets = new Map<string, THREE.Vector3>();
     const sectorSize = 42;
     const updateSectors = () => {
       const centerX = Math.round(-deepSpace.position.x / sectorSize);
@@ -344,6 +355,8 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       }).sort((left, right) => left.diaryDate.localeCompare(right.diaryDate)).map(starPosition);
       if (points.length < 2) continue;
       const curve = new THREE.CatmullRomCurve3(points);
+      const center = points.reduce((total, point) => total.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
+      galaxyTargets.set(`${galaxy.year}-${galaxy.month}`, center);
       const ribbon = new THREE.Mesh(
         new THREE.TubeGeometry(curve, Math.max(80, points.length * 7), 0.065, 8, false),
         new THREE.MeshBasicMaterial({ color: "#b8a1ff", transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }),
@@ -425,6 +438,16 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const elapsed = performance.now() * 0.00008;
+      const focusRequest = galaxyFocusRef.current;
+      if (focusRequest) {
+        const target = galaxyTargets.get(`${focusRequest.year}-${focusRequest.month}`);
+        if (target) {
+          deepSpace.position.x += (-target.x - deepSpace.position.x) * 0.06;
+          deepSpace.position.y += (-target.y - deepSpace.position.y) * 0.06;
+          updateSectors();
+          if (Math.hypot(target.x + deepSpace.position.x, target.y + deepSpace.position.y) < 0.08) galaxyFocusRef.current = null;
+        }
+      }
       camera.position.z += (zoom - camera.position.z) * 0.08;
       camera.lookAt(0, 0, -4);
       farStars.rotation.y = elapsed * 0.14;
@@ -491,6 +514,26 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
           <p className="mt-0.5 truncate text-xs text-white">{hoveredStar.title}</p>
         </div>
       )}
+      <nav aria-label="은하수 월 이동" className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-2xl border border-white/10 bg-[#080b20]/70 p-2 shadow-2xl backdrop-blur-xl sm:right-4">
+        <p className="px-2 pb-2 text-center text-[10px] font-medium tracking-[0.16em] text-[#9fb4ff]">{navigationYear}</p>
+        <div className="space-y-1">
+          {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
+            const completed = completedMonths.has(month);
+            return (
+              <button
+                key={month}
+                type="button"
+                disabled={!completed}
+                onClick={() => focusGalaxy(month)}
+                title={completed ? `${navigationYear}년 ${month}월의 은하수로 이동` : `${month}월 은하수는 아직 완성되지 않았습니다`}
+                className={`flex h-7 w-9 items-center justify-center rounded-lg text-xs transition ${completed ? "text-[#f4eaff] hover:bg-[#b8a1ff]/25 hover:text-white" : "cursor-not-allowed text-white/25"} ${selectedMonth === month ? "bg-[#b8a1ff]/30 text-white shadow-[0_0_18px_rgba(184,161,255,.4)]" : ""}`}
+              >
+                {month}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
