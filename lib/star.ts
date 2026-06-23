@@ -9,9 +9,9 @@ export const EMOTION_STAR_COLORS = {
 
 export type EmotionKey = keyof typeof EMOTION_STAR_COLORS;
 
-const MIN_COORDINATE = -3000;
-const MAX_COORDINATE = 3000;
-const MIN_STAR_DISTANCE = 180;
+const MIN_COORDINATE = -4200;
+const MAX_COORDINATE = 4200;
+const MIN_STAR_DISTANCE = 320;
 const MAX_POSITION_ATTEMPTS = 20;
 
 export type StarPosition = {

@@ -20,11 +20,11 @@ const colors = {
 
 function spiralPosition(day) {
   const progress = (day - 1) / 30;
-  const angle = progress * Math.PI * 4.7;
-  const radius = 190 + progress * 720;
+  const angle = progress * Math.PI * 2.8;
+  const radius = 760 + progress * 1850;
   return {
-    x: Math.round(-720 + Math.cos(angle) * radius),
-    y: Math.round(460 + Math.sin(angle) * radius * 0.56),
+    x: Math.round(-350 + Math.cos(angle) * radius),
+    y: Math.round(260 + Math.sin(angle) * radius * 0.62),
   };
 }
 
@@ -50,7 +50,7 @@ async function seed() {
       await client.query(
         `insert into "Star" (id, "userId", "diaryId", x, y, color, emotion, "createdAt", "updatedAt")
          values ($1, $2, $3, $4, $5, $6, $7::"Emotion", now(), now())
-         on conflict ("diaryId") do nothing`,
+         on conflict ("diaryId") do update set x = excluded.x, y = excluded.y, color = excluded.color, emotion = excluded.emotion, "updatedAt" = now()`,
         [randomUUID(), userId, diaryId, position.x, position.y, colors[emotion], emotion],
       );
     }

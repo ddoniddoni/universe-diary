@@ -221,7 +221,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.62, 0.62, 0.48));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.36, 0.5, 0.58));
 
     const glowTexture = createGlowTexture();
     const universe = new THREE.Group();
@@ -301,8 +301,11 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     };
     updateSectors();
     const diaryStarGeometry = createDiaryStarGeometry();
+    const diaryStarHitGeometry = new THREE.SphereGeometry(0.72, 12, 12);
+    const diaryStarHitMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     const pickableStars: THREE.Object3D[] = [];
     const diaryStars: THREE.Mesh[] = [];
+    const diaryHalos: THREE.Sprite[] = [];
     for (const star of stars) {
       const position = starPosition(star);
       const core = new THREE.Mesh(diaryStarGeometry, new THREE.MeshBasicMaterial({ color: star.color }));
@@ -311,15 +314,24 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       core.userData.diaryId = star.diaryId;
       core.userData.title = star.title;
       core.userData.diaryDate = star.diaryDate;
-      core.scale.setScalar(0.85 + seededNumber(star.id) * 0.65);
+      core.userData.baseScale = 0.8 + seededNumber(star.id) * 0.5;
+      core.scale.setScalar(core.userData.baseScale as number);
       pickableStars.push(core);
       diaryStars.push(core);
       deepSpace.add(core);
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
-      halo.scale.setScalar(2.25);
-      halo.material.opacity = 0.34;
+      halo.userData.baseScale = 1.55;
+      halo.scale.setScalar(halo.userData.baseScale as number);
+      diaryHalos.push(halo);
       deepSpace.add(halo);
+      const hitArea = new THREE.Mesh(diaryStarHitGeometry, diaryStarHitMaterial);
+      hitArea.position.copy(position);
+      hitArea.userData.diaryId = star.diaryId;
+      hitArea.userData.title = star.title;
+      hitArea.userData.diaryDate = star.diaryDate;
+      pickableStars.push(hitArea);
+      deepSpace.add(hitArea);
       const light = new THREE.PointLight(star.color, 2.5, 9);
       light.position.copy(position);
       deepSpace.add(light);
@@ -419,7 +431,12 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       nearStars.rotation.y = -elapsed * 0.05;
       milkyWay.rotation.y = -0.55 + elapsed * 0.035;
       nebulae.rotation.z = elapsed * 0.018;
-      diaryStars.forEach((star, index) => { star.rotation.z += 0.0008 + (index % 3) * 0.00015; });
+      const closeScale = THREE.MathUtils.clamp((camera.position.z - 10) / 22, 0.5, 1);
+      diaryStars.forEach((star, index) => {
+        star.rotation.z += 0.0008 + (index % 3) * 0.00015;
+        star.scale.setScalar((star.userData.baseScale as number) * closeScale);
+      });
+      diaryHalos.forEach((halo) => halo.scale.setScalar((halo.userData.baseScale as number) * closeScale));
       let orbitIndex = 0;
       orbitPivots.forEach((orbit) => {
         orbit.rotation.z += 0.0007 + (orbitIndex % 5) * 0.00013;
