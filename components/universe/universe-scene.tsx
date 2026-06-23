@@ -36,40 +36,6 @@ function createGlowTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-function createPlanetTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 768;
-  canvas.height = 384;
-  const context = canvas.getContext("2d");
-  if (!context) return new THREE.Texture();
-  const ocean = context.createLinearGradient(0, 0, 768, 384);
-  ocean.addColorStop(0, "#07102d");
-  ocean.addColorStop(0.42, "#155065");
-  ocean.addColorStop(0.75, "#103049");
-  ocean.addColorStop(1, "#080b22");
-  context.fillStyle = ocean;
-  context.fillRect(0, 0, 768, 384);
-  for (let index = 0; index < 230; index += 1) {
-    const x = seededNumber(`land-x-${index}`) * 768;
-    const y = seededNumber(`land-y-${index}`) * 384;
-    const width = 12 + seededNumber(`land-w-${index}`) * 95;
-    const height = 4 + seededNumber(`land-h-${index}`) * 28;
-    context.fillStyle = index % 3 === 0 ? "rgba(89,132,106,.48)" : "rgba(41,102,94,.42)";
-    context.beginPath();
-    context.ellipse(x, y, width, height, seededNumber(`land-r-${index}`) * Math.PI, 0, Math.PI * 2);
-    context.fill();
-  }
-  for (let index = 0; index < 110; index += 1) {
-    context.fillStyle = `rgba(210,235,255,${0.025 + seededNumber(`cloud-${index}`) * 0.09})`;
-    context.beginPath();
-    context.ellipse(seededNumber(`cloud-x-${index}`) * 768, seededNumber(`cloud-y-${index}`) * 384, 35 + seededNumber(`cloud-w-${index}`) * 120, 2 + seededNumber(`cloud-h-${index}`) * 8, 0, 0, Math.PI * 2);
-    context.fill();
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
 function createStarField(count: number, spread: number, seed: string, texture: THREE.Texture) {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
@@ -110,6 +76,71 @@ function createDiaryStarGeometry() {
   return geometry;
 }
 
+function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture) {
+  const sector = new THREE.Group();
+  const sectorSize = 42;
+  const originX = x * sectorSize;
+  const originY = y * sectorSize;
+  const orbitPivots: THREE.Group[] = [];
+  const planetColors = ["#6387bc", "#d6a66a", "#b2728d", "#7c91a9", "#8a76c5", "#6eaa9a"];
+  const systemCount = 1 + Math.floor(seededNumber(`system-count-${x}-${y}`) * 2);
+  for (let systemIndex = 0; systemIndex < systemCount; systemIndex += 1) {
+    const systemX = originX + 5 + seededNumber(`system-x-${x}-${y}-${systemIndex}`) * (sectorSize - 10);
+    const systemY = originY + 5 + seededNumber(`system-y-${x}-${y}-${systemIndex}`) * (sectorSize - 10);
+    const systemZ = -10 - seededNumber(`system-z-${x}-${y}-${systemIndex}`) * 14;
+    const sunColor = new THREE.Color().setHSL(0.06 + seededNumber(`sun-color-${x}-${y}-${systemIndex}`) * 0.1, 0.85, 0.65);
+    const sunSize = 0.48 + seededNumber(`sun-size-${x}-${y}-${systemIndex}`) * 0.72;
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(sunSize, 20, 20), new THREE.MeshBasicMaterial({ color: sunColor }));
+    sun.position.set(systemX, systemY, systemZ);
+    sector.add(sun);
+    const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: sunColor, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false }));
+    corona.position.copy(sun.position);
+    corona.scale.setScalar(sunSize * 6);
+    sector.add(corona);
+    const sunlight = new THREE.PointLight(sunColor, 3.2, 18);
+    sunlight.position.copy(sun.position);
+    sector.add(sunlight);
+    const planetCount = 2 + Math.floor(seededNumber(`planet-count-${x}-${y}-${systemIndex}`) * 4);
+    for (let planetIndex = 0; planetIndex < planetCount; planetIndex += 1) {
+      const orbit = new THREE.Group();
+      orbit.position.copy(sun.position);
+      orbit.rotation.x = 0.2 + seededNumber(`orbit-tilt-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.5;
+      orbit.rotation.z = seededNumber(`orbit-phase-${x}-${y}-${systemIndex}-${planetIndex}`) * Math.PI * 2;
+      const orbitRadius = 2.1 + planetIndex * 1.25 + seededNumber(`orbit-radius-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.7;
+      const planetSize = 0.12 + seededNumber(`planet-size-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.32;
+      const color = planetColors[Math.floor(seededNumber(`planet-color-${x}-${y}-${systemIndex}-${planetIndex}`) * planetColors.length)];
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(planetSize, 16, 16), new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.08 }));
+      planet.position.x = orbitRadius;
+      orbit.add(planet);
+      const orbitPath = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 40 }, (_, index) => {
+        const angle = (index / 40) * Math.PI * 2;
+        return new THREE.Vector3(Math.cos(angle) * orbitRadius, Math.sin(angle) * orbitRadius, 0);
+      })), new THREE.LineBasicMaterial({ color: "#8a96c8", transparent: true, opacity: 0.08 }));
+      orbit.add(orbitPath);
+      if (seededNumber(`planet-ring-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.77) {
+        const planetRing = new THREE.Mesh(new THREE.RingGeometry(planetSize * 1.45, planetSize * 2.25, 32), new THREE.MeshBasicMaterial({ color: "#d9d0bd", transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+        planetRing.rotation.x = Math.PI / 2.8;
+        planet.add(planetRing);
+      }
+      sector.add(orbit);
+      orbitPivots.push(orbit);
+    }
+  }
+  sector.userData.orbitPivots = orbitPivots;
+  return sector;
+}
+
+function disposeDeepSpaceSector(sector: THREE.Group) {
+  sector.traverse((object) => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+      object.geometry.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach((material) => material.dispose());
+    }
+    if (object instanceof THREE.Sprite) object.material.dispose();
+  });
+}
+
 export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -138,7 +169,6 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 1.15, 0.85, 0.2));
 
     const glowTexture = createGlowTexture();
-    const planetTexture = createPlanetTexture();
     const universe = new THREE.Group();
     scene.add(universe);
     const farStars = createStarField(2800, 105, "far", glowTexture);
@@ -184,17 +214,37 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     const sunlight = new THREE.DirectionalLight("#b8d5ff", 3.6);
     sunlight.position.set(-18, 13, 20);
     scene.add(sunlight);
-    const planet = new THREE.Mesh(new THREE.SphereGeometry(7.4, 64, 64), new THREE.MeshPhysicalMaterial({ map: planetTexture, roughness: 0.75, metalness: 0.12, clearcoat: 0.15, clearcoatRoughness: 0.7 }));
-    planet.position.set(16, -9, -20);
-    scene.add(planet);
-    const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(7.62, 64, 64), new THREE.MeshBasicMaterial({ color: "#4bc5ff", transparent: true, opacity: 0.13, side: THREE.BackSide, blending: THREE.AdditiveBlending }));
-    atmosphere.position.copy(planet.position);
-    scene.add(atmosphere);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(9.2, 9.35, 128), new THREE.MeshBasicMaterial({ color: "#9eb8ff", transparent: true, opacity: 0.42, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
-    ring.position.copy(planet.position);
-    ring.rotation.set(0.95, 0.18, -0.12);
-    scene.add(ring);
-
+    const deepSpace = new THREE.Group();
+    scene.add(deepSpace);
+    const sectors = new Map<string, THREE.Group>();
+    const orbitPivots = new Set<THREE.Group>();
+    const sectorSize = 42;
+    const updateSectors = () => {
+      const centerX = Math.round(-deepSpace.position.x / sectorSize);
+      const centerY = Math.round(-deepSpace.position.y / sectorSize);
+      const wanted = new Set<string>();
+      for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+        for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+          const sectorX = centerX + offsetX;
+          const sectorY = centerY + offsetY;
+          const key = `${sectorX}:${sectorY}`;
+          wanted.add(key);
+          if (sectors.has(key)) continue;
+          const sector = createDeepSpaceSector(sectorX, sectorY, glowTexture);
+          sectors.set(key, sector);
+          (sector.userData.orbitPivots as THREE.Group[]).forEach((orbit) => orbitPivots.add(orbit));
+          deepSpace.add(sector);
+        }
+      }
+      sectors.forEach((sector, key) => {
+        if (wanted.has(key)) return;
+        (sector.userData.orbitPivots as THREE.Group[]).forEach((orbit) => orbitPivots.delete(orbit));
+        deepSpace.remove(sector);
+        disposeDeepSpaceSector(sector);
+        sectors.delete(key);
+      });
+    };
+    updateSectors();
     const diaryStarGeometry = createDiaryStarGeometry();
     const pickableStars: THREE.Object3D[] = [];
     const diaryStars: THREE.Mesh[] = [];
@@ -208,14 +258,14 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       core.scale.setScalar(0.85 + seededNumber(star.id) * 0.65);
       pickableStars.push(core);
       diaryStars.push(core);
-      scene.add(core);
+      deepSpace.add(core);
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
       halo.scale.setScalar(3.2);
-      scene.add(halo);
+      deepSpace.add(halo);
       const light = new THREE.PointLight(star.color, 2.5, 9);
       light.position.copy(position);
-      scene.add(light);
+      deepSpace.add(light);
     }
 
     for (const galaxy of galaxies) {
@@ -226,14 +276,13 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       if (points.length < 2) continue;
       const curve = new THREE.CatmullRomCurve3(points);
       const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(32, points.length * 14)));
-      scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#d0bbff", transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending })));
+      deepSpace.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#d0bbff", transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending })));
     }
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hovered: THREE.Intersection | undefined;
-    let yaw = 0;
-    let pitch = 0;
+    let zoom = 32;
     let dragging = false;
     let startX = 0;
     let startY = 0;
@@ -254,8 +303,9 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       const deltaX = event.clientX - startX;
       const deltaY = event.clientY - startY;
       if (Math.abs(deltaX) + Math.abs(deltaY) > 3) moved = true;
-      yaw += deltaX * 0.004;
-      pitch = THREE.MathUtils.clamp(pitch + deltaY * 0.003, -0.45, 0.45);
+      deepSpace.position.x += deltaX * 0.05;
+      deepSpace.position.y -= deltaY * 0.05;
+      updateSectors();
       startX = event.clientX;
       startY = event.clientY;
     };
@@ -265,26 +315,33 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       renderer.domElement.style.cursor = hovered ? "pointer" : "grab";
       renderer.domElement.releasePointerCapture(event.pointerId);
     };
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.018, 15, 58);
+    };
     const onResize = () => { camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); composer.setSize(mount.clientWidth, mount.clientHeight); };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("resize", onResize);
 
     let frame = 0;
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const elapsed = performance.now() * 0.00008;
-      camera.position.x = Math.sin(elapsed + yaw) * 4.1;
-      camera.position.y = 0.5 + pitch * 8;
+      camera.position.z += (zoom - camera.position.z) * 0.08;
       camera.lookAt(0, 0, -4);
       farStars.rotation.y = elapsed * 0.14;
       nearStars.rotation.y = -elapsed * 0.05;
       milkyWay.rotation.y = -0.55 + elapsed * 0.035;
       nebulae.rotation.z = elapsed * 0.018;
       diaryStars.forEach((star, index) => { star.rotation.z += 0.0008 + (index % 3) * 0.00015; });
-      planet.rotation.y += 0.00045;
-      atmosphere.rotation.y += 0.0006;
+      let orbitIndex = 0;
+      orbitPivots.forEach((orbit) => {
+        orbit.rotation.z += 0.0007 + (orbitIndex % 5) * 0.00013;
+        orbitIndex += 1;
+      });
       composer.render();
     };
     animate();
@@ -294,6 +351,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("wheel", onWheel);
       window.removeEventListener("resize", onResize);
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
@@ -304,7 +362,6 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
         if (object instanceof THREE.Sprite) object.material.dispose();
       });
       glowTexture.dispose();
-      planetTexture.dispose();
       composer.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
