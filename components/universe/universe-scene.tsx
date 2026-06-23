@@ -227,6 +227,7 @@ function disposeDeepSpaceSector(sector: THREE.Group) {
 export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; galaxies: Galaxy[]; year: number }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const galaxyFocusRef = useRef<{ year: number; month: number } | null>(null);
+  const requestedZoomRef = useRef<number | null>(null);
   const router = useRouter();
   const [hoveredStar, setHoveredStar] = useState<HoveredStar | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
@@ -236,6 +237,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
   function focusGalaxy(month: number) {
     if (!completedMonths.has(month)) return;
     galaxyFocusRef.current = { year: navigationYear, month };
+    requestedZoomRef.current = 17;
     setSelectedMonth(month);
   }
 
@@ -455,13 +457,18 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
       frame = requestAnimationFrame(animate);
       const elapsed = performance.now() * 0.00008;
       const focusRequest = galaxyFocusRef.current;
+      if (requestedZoomRef.current !== null) {
+        zoom = requestedZoomRef.current;
+        requestedZoomRef.current = null;
+      }
       if (focusRequest) {
         const target = galaxyTargets.get(`${focusRequest.year}-${focusRequest.month}`);
         if (target) {
           deepSpace.position.x += (-target.x - deepSpace.position.x) * 0.06;
           deepSpace.position.y += (-target.y - deepSpace.position.y) * 0.06;
+          deepSpace.position.z += (-4 - target.z - deepSpace.position.z) * 0.06;
           updateSectors();
-          if (Math.hypot(target.x + deepSpace.position.x, target.y + deepSpace.position.y) < 0.08) galaxyFocusRef.current = null;
+          if (Math.hypot(target.x + deepSpace.position.x, target.y + deepSpace.position.y, -4 - target.z - deepSpace.position.z) < 0.08) galaxyFocusRef.current = null;
         }
       }
       camera.position.z += (zoom - camera.position.z) * 0.08;
