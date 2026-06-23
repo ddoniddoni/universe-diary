@@ -72,9 +72,11 @@ export default async function UniversePage() {
         </Link>
       </section>
 
-      <p className="pointer-events-none absolute bottom-5 right-5 z-10 hidden text-xs text-white/45 sm:block">
-        별을 가리키고 클릭해 기록을 만나보세요
-      </p>
+      <aside className="pointer-events-none absolute bottom-5 right-5 z-10 hidden rounded-2xl border border-white/10 bg-[#080b20]/55 px-4 py-3 text-xs leading-5 text-white/55 backdrop-blur-xl sm:block">
+        <p className="font-medium tracking-[0.18em] text-[#9fb4ff]">DEEP SPACE</p>
+        <p className="mt-1">드래그해 성계 사이를 항해하고,</p>
+        <p>스크롤해 심우주를 확대·축소하세요.</p>
+      </aside>
     </main>
   );
 }
