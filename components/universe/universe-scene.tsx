@@ -27,13 +27,47 @@ function createGlowTexture() {
   const context = canvas.getContext("2d");
   if (!context) return new THREE.Texture();
   const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(0.08, "rgba(225,235,255,.95)");
-  gradient.addColorStop(0.28, "rgba(140,180,255,.35)");
+  gradient.addColorStop(0, "rgba(255,255,255,.92)");
+  gradient.addColorStop(0.06, "rgba(225,235,255,.7)");
+  gradient.addColorStop(0.2, "rgba(140,180,255,.18)");
   gradient.addColorStop(1, "rgba(80,100,255,0)");
   context.fillStyle = gradient;
   context.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(canvas);
+}
+
+function createPlanetSurfaceTexture(seed: string, baseColor: string, gasGiant: boolean) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.Texture();
+  const base = new THREE.Color(baseColor);
+  context.fillStyle = base.getStyle();
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (gasGiant) {
+    for (let index = 0; index < 20; index += 1) {
+      const shade = base.clone().offsetHSL(0, 0, (seededNumber(`${seed}-band-${index}`) - 0.5) * 0.22);
+      context.fillStyle = shade.getStyle();
+      const y = (index / 20) * canvas.height;
+      context.fillRect(0, y, canvas.width, 3 + seededNumber(`${seed}-band-height-${index}`) * 8);
+    }
+    context.fillStyle = "rgba(30,20,35,.28)";
+    context.beginPath();
+    context.ellipse(164, 76, 28, 9, -0.16, 0, Math.PI * 2);
+    context.fill();
+  } else {
+    for (let index = 0; index < 38; index += 1) {
+      const shade = base.clone().offsetHSL(0, -0.1, (seededNumber(`${seed}-surface-${index}`) - 0.55) * 0.25);
+      context.fillStyle = shade.getStyle();
+      context.beginPath();
+      context.ellipse(seededNumber(`${seed}-surface-x-${index}`) * canvas.width, seededNumber(`${seed}-surface-y-${index}`) * canvas.height, 2 + seededNumber(`${seed}-surface-w-${index}`) * 17, 1 + seededNumber(`${seed}-surface-h-${index}`) * 8, seededNumber(`${seed}-surface-r-${index}`) * Math.PI, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 function createStarField(count: number, spread: number, seed: string, texture: THREE.Texture) {
@@ -93,9 +127,9 @@ function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture)
     const sun = new THREE.Mesh(new THREE.SphereGeometry(sunSize, 20, 20), new THREE.MeshBasicMaterial({ color: sunColor }));
     sun.position.set(systemX, systemY, systemZ);
     sector.add(sun);
-    const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: sunColor, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: sunColor, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false }));
     corona.position.copy(sun.position);
-    corona.scale.setScalar(sunSize * 6);
+    corona.scale.setScalar(sunSize * 3.6);
     sector.add(corona);
     const sunlight = new THREE.PointLight(sunColor, 3.2, 18);
     sunlight.position.copy(sun.position);
@@ -109,14 +143,16 @@ function createDeepSpaceSector(x: number, y: number, glowTexture: THREE.Texture)
       const orbitRadius = 2.1 + planetIndex * 1.25 + seededNumber(`orbit-radius-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.7;
       const planetSize = 0.12 + seededNumber(`planet-size-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.32;
       const color = planetColors[Math.floor(seededNumber(`planet-color-${x}-${y}-${systemIndex}-${planetIndex}`) * planetColors.length)];
-      const planet = new THREE.Mesh(new THREE.SphereGeometry(planetSize, 16, 16), new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.08 }));
+      const gasGiant = planetSize > 0.31 || seededNumber(`planet-type-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.72;
+      const surfaceTexture = createPlanetSurfaceTexture(`planet-${x}-${y}-${systemIndex}-${planetIndex}`, color, gasGiant);
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(planetSize, 24, 24), new THREE.MeshPhysicalMaterial({ map: surfaceTexture, roughness: gasGiant ? 0.48 : 0.84, metalness: 0.03, clearcoat: gasGiant ? 0.12 : 0.02 }));
       planet.position.x = orbitRadius;
+      planet.userData.rotationSpeed = 0.0009 + seededNumber(`planet-spin-${x}-${y}-${systemIndex}-${planetIndex}`) * 0.0014;
       orbit.add(planet);
-      const orbitPath = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 40 }, (_, index) => {
-        const angle = (index / 40) * Math.PI * 2;
-        return new THREE.Vector3(Math.cos(angle) * orbitRadius, Math.sin(angle) * orbitRadius, 0);
-      })), new THREE.LineBasicMaterial({ color: "#8a96c8", transparent: true, opacity: 0.08 }));
-      orbit.add(orbitPath);
+      if (!gasGiant) {
+        const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(planetSize * 1.045, 24, 24), new THREE.MeshBasicMaterial({ color: "#b8e8ff", transparent: true, opacity: 0.08, side: THREE.BackSide, blending: THREE.AdditiveBlending }));
+        planet.add(atmosphere);
+      }
       if (seededNumber(`planet-ring-${x}-${y}-${systemIndex}-${planetIndex}`) > 0.77) {
         const planetRing = new THREE.Mesh(new THREE.RingGeometry(planetSize * 1.45, planetSize * 2.25, 32), new THREE.MeshBasicMaterial({ color: "#d9d0bd", transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
         planetRing.rotation.x = Math.PI / 2.8;
@@ -135,7 +171,11 @@ function disposeDeepSpaceSector(sector: THREE.Group) {
     if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
       object.geometry.dispose();
       const materials = Array.isArray(object.material) ? object.material : [object.material];
-      materials.forEach((material) => material.dispose());
+      materials.forEach((material) => {
+        const texturedMaterial = material as THREE.MeshStandardMaterial;
+        texturedMaterial.map?.dispose();
+        material.dispose();
+      });
     }
     if (object instanceof THREE.Sprite) object.material.dispose();
   });
@@ -166,7 +206,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 1.15, 0.85, 0.2));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.62, 0.62, 0.48));
 
     const glowTexture = createGlowTexture();
     const universe = new THREE.Group();
@@ -261,7 +301,8 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       deepSpace.add(core);
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
-      halo.scale.setScalar(3.2);
+      halo.scale.setScalar(2.25);
+      halo.material.opacity = 0.34;
       deepSpace.add(halo);
       const light = new THREE.PointLight(star.color, 2.5, 9);
       light.position.copy(position);
@@ -340,6 +381,8 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       let orbitIndex = 0;
       orbitPivots.forEach((orbit) => {
         orbit.rotation.z += 0.0007 + (orbitIndex % 5) * 0.00013;
+        const planet = orbit.children.find((child) => child instanceof THREE.Mesh);
+        if (planet) planet.rotation.y += planet.userData.rotationSpeed as number;
         orbitIndex += 1;
       });
       composer.render();
@@ -357,7 +400,11 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
         if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
           object.geometry.dispose();
           const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((material) => material.dispose());
+          materials.forEach((material) => {
+            const texturedMaterial = material as THREE.MeshStandardMaterial;
+            texturedMaterial.map?.dispose();
+            material.dispose();
+          });
         }
         if (object instanceof THREE.Sprite) object.material.dispose();
       });
