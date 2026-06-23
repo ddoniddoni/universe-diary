@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const diaryDate = getTodayDiaryDate();
   try {
     const stars = await db.star.findMany({ where: { userId: user.userId }, select: { x: true, y: true } });
-    const position = createStarPosition(stars);
+    const position = createStarPosition(stars, diaryDate);
     const diary = await db.$transaction(async (tx) => {
       const created = await tx.diary.create({ data: { ...parsed.data, userId: user.userId, diaryDate } });
       await tx.star.create({ data: { userId: user.userId, diaryId: created.id, ...position, color: EMOTION_STAR_COLORS[parsed.data.emotion], emotion: parsed.data.emotion } });
