@@ -110,52 +110,6 @@ function createDiaryStarGeometry() {
   return geometry;
 }
 
-function createAtlasChunk(x: number, y: number, geometry: THREE.BufferGeometry, glowTexture: THREE.Texture) {
-  const chunk = new THREE.Group();
-  const chunkSize = 24;
-  const originX = x * chunkSize;
-  const originY = y * chunkSize;
-  const nodes: THREE.Vector3[] = [];
-  const palette = ["#7bdff2", "#b8a1ff", "#ffafcc", "#ffd166", "#80ed99"];
-
-  for (let index = 0; index < 9; index += 1) {
-    const node = new THREE.Vector3(
-      originX + 2 + seededNumber(`atlas-${x}-${y}-x-${index}`) * (chunkSize - 4),
-      originY + 2 + seededNumber(`atlas-${x}-${y}-y-${index}`) * (chunkSize - 4),
-      -8 - seededNumber(`atlas-${x}-${y}-z-${index}`) * 8,
-    );
-    nodes.push(node);
-    const color = palette[Math.floor(seededNumber(`atlas-${x}-${y}-color-${index}`) * palette.length)];
-    const core = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.68 }));
-    core.position.copy(node);
-    core.scale.setScalar(0.24 + seededNumber(`atlas-${x}-${y}-scale-${index}`) * 0.2);
-    core.rotation.z = seededNumber(`atlas-${x}-${y}-rotation-${index}`) * Math.PI * 2;
-    chunk.add(core);
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false }));
-    halo.position.copy(node);
-    halo.scale.setScalar(1.7);
-    chunk.add(halo);
-  }
-
-  for (let index = 1; index < nodes.length; index += 1) {
-    const parent = nodes[Math.floor(seededNumber(`atlas-${x}-${y}-parent-${index}`) * index)];
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([parent, nodes[index]]);
-    chunk.add(new THREE.Line(lineGeometry, new THREE.LineBasicMaterial({ color: "#7787c9", transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending })));
-  }
-  return chunk;
-}
-
-function disposeAtlasChunk(chunk: THREE.Group) {
-  chunk.traverse((object) => {
-    if (object instanceof THREE.Line) object.geometry.dispose();
-    if (object instanceof THREE.Mesh) {
-      const materials = Array.isArray(object.material) ? object.material : [object.material];
-      materials.forEach((material) => material.dispose());
-    }
-    if (object instanceof THREE.Sprite) object.material.dispose();
-  });
-}
-
 export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -241,35 +195,7 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
     ring.rotation.set(0.95, 0.18, -0.12);
     scene.add(ring);
 
-    const atlasMap = new THREE.Group();
-    scene.add(atlasMap);
     const diaryStarGeometry = createDiaryStarGeometry();
-    const atlasChunks = new Map<string, THREE.Group>();
-    const atlasChunkSize = 24;
-    const updateAtlasChunks = () => {
-      const centerX = Math.round(-atlasMap.position.x / atlasChunkSize);
-      const centerY = Math.round(-atlasMap.position.y / atlasChunkSize);
-      const wanted = new Set<string>();
-      for (let offsetX = -2; offsetX <= 2; offsetX += 1) {
-        for (let offsetY = -2; offsetY <= 2; offsetY += 1) {
-          const chunkX = centerX + offsetX;
-          const chunkY = centerY + offsetY;
-          const key = `${chunkX}:${chunkY}`;
-          wanted.add(key);
-          if (atlasChunks.has(key)) continue;
-          const chunk = createAtlasChunk(chunkX, chunkY, diaryStarGeometry, glowTexture);
-          atlasChunks.set(key, chunk);
-          atlasMap.add(chunk);
-        }
-      }
-      atlasChunks.forEach((chunk, key) => {
-        if (wanted.has(key)) return;
-        atlasMap.remove(chunk);
-        disposeAtlasChunk(chunk);
-        atlasChunks.delete(key);
-      });
-    };
-    updateAtlasChunks();
     const pickableStars: THREE.Object3D[] = [];
     const diaryStars: THREE.Mesh[] = [];
     for (const star of stars) {
@@ -282,14 +208,14 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       core.scale.setScalar(0.85 + seededNumber(star.id) * 0.65);
       pickableStars.push(core);
       diaryStars.push(core);
-      atlasMap.add(core);
+      scene.add(core);
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: star.color, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
       halo.scale.setScalar(3.2);
-      atlasMap.add(halo);
+      scene.add(halo);
       const light = new THREE.PointLight(star.color, 2.5, 9);
       light.position.copy(position);
-      atlasMap.add(light);
+      scene.add(light);
     }
 
     for (const galaxy of galaxies) {
@@ -300,13 +226,14 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       if (points.length < 2) continue;
       const curve = new THREE.CatmullRomCurve3(points);
       const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(32, points.length * 14)));
-      atlasMap.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#d0bbff", transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending })));
+      scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#d0bbff", transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending })));
     }
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let hovered: THREE.Intersection | undefined;
-    let zoom = 32;
+    let yaw = 0;
+    let pitch = 0;
     let dragging = false;
     let startX = 0;
     let startY = 0;
@@ -327,9 +254,8 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       const deltaX = event.clientX - startX;
       const deltaY = event.clientY - startY;
       if (Math.abs(deltaX) + Math.abs(deltaY) > 3) moved = true;
-      atlasMap.position.x += deltaX * 0.04;
-      atlasMap.position.y -= deltaY * 0.04;
-      updateAtlasChunks();
+      yaw += deltaX * 0.004;
+      pitch = THREE.MathUtils.clamp(pitch + deltaY * 0.003, -0.45, 0.45);
       startX = event.clientX;
       startY = event.clientY;
     };
@@ -339,23 +265,19 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       renderer.domElement.style.cursor = hovered ? "pointer" : "grab";
       renderer.domElement.releasePointerCapture(event.pointerId);
     };
-    const onWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.018, 16, 58);
-    };
     const onResize = () => { camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); composer.setSize(mount.clientWidth, mount.clientHeight); };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
-    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("resize", onResize);
 
     let frame = 0;
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const elapsed = performance.now() * 0.00008;
-      camera.position.z += (zoom - camera.position.z) * 0.08;
-      camera.lookAt(0, 0, -6);
+      camera.position.x = Math.sin(elapsed + yaw) * 4.1;
+      camera.position.y = 0.5 + pitch * 8;
+      camera.lookAt(0, 0, -4);
       farStars.rotation.y = elapsed * 0.14;
       nearStars.rotation.y = -elapsed * 0.05;
       milkyWay.rotation.y = -0.55 + elapsed * 0.035;
@@ -372,7 +294,6 @@ export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxie
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
-      renderer.domElement.removeEventListener("wheel", onWheel);
       window.removeEventListener("resize", onResize);
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
