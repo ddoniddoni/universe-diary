@@ -19,3 +19,11 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+a, button, [role="button"] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}

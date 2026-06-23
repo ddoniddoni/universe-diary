@@ -1,3 +1,0 @@
-export function SpaceBackdrop() {
-  return <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden"><div className="absolute inset-0 bg-[#050510]" /><div className="absolute -left-1/4 top-1/4 h-[70vw] w-[70vw] rounded-full bg-[#7d2c8f]/25 blur-3xl" /><div className="absolute -right-1/4 bottom-[-30%] h-[65vw] w-[65vw] rounded-full bg-[#174a91]/35 blur-3xl" /><div className="absolute left-[72%] top-[18%] size-24 rounded-full bg-[radial-gradient(circle_at_35%_30%,#b9d7ff,#4067ac_45%,#111333_72%)] shadow-[0_0_45px_#7198e8]" /><div className="absolute -left-16 bottom-[-5rem] size-64 rounded-full border border-[#d8a7ff]/30 bg-[radial-gradient(circle_at_65%_30%,#1a103d,#6c326f_90%)] shadow-[0_0_80px_#8e43a0]" /></div>;
-}
