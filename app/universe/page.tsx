@@ -1,90 +1,61 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { UniverseScene } from "@/components/universe/universe-scene";
 import { requireUser } from "@/lib/auth";
-import { getTodayDiaryDate } from "@/lib/date";
+import { getSeoulCalendarDate } from "@/lib/date";
 import { db } from "@/lib/db";
 
-export default async function UniversePage() {
+export default async function UniverseIndexPage() {
   const user = await requireUser();
-  const [stars, galaxies, todayDiary] = await Promise.all([
-    db.star.findMany({
-      where: { userId: user.userId },
-      include: { diary: { select: { id: true, title: true, diaryDate: true } } },
-    }),
-    db.galaxy.findMany({
-      where: { userId: user.userId, isCompleted: true },
-      select: { id: true, year: true, month: true },
-    }),
-    db.diary.findUnique({
-      where: {
-        userId_diaryDate: { userId: user.userId, diaryDate: getTodayDiaryDate() },
-      },
-      select: { id: true },
-    }),
+  const [diaries, galaxies] = await Promise.all([
+    db.diary.findMany({ where: { userId: user.userId }, select: { diaryDate: true } }),
+    db.galaxy.findMany({ where: { userId: user.userId, isCompleted: true }, select: { year: true } }),
   ]);
-
-  const sceneStars = stars.map((star) => ({
-    id: star.id,
-    diaryId: star.diary.id,
-    title: star.diary.title,
-    diaryDate: star.diary.diaryDate.toISOString(),
-    color: star.color,
-    x: star.x,
-    y: star.y,
-  }));
+  const years = new Map<number, { diaryCount: number; galaxyCount: number }>();
+  for (const diary of diaries) {
+    const year = diary.diaryDate.getUTCFullYear();
+    const summary = years.get(year) ?? { diaryCount: 0, galaxyCount: 0 };
+    summary.diaryCount += 1;
+    years.set(year, summary);
+  }
+  for (const galaxy of galaxies) {
+    const summary = years.get(galaxy.year) ?? { diaryCount: 0, galaxyCount: 0 };
+    summary.galaxyCount += 1;
+    years.set(galaxy.year, summary);
+  }
+  const currentYear = getSeoulCalendarDate().year;
+  if (!years.has(currentYear)) years.set(currentYear, { diaryCount: 0, galaxyCount: 0 });
+  const universes = [...years.entries()].sort(([left], [right]) => right - left);
 
   return (
-    <main className="relative flex min-h-svh overflow-hidden bg-[#02030b]">
-      <UniverseScene stars={sceneStars} galaxies={galaxies} />
+    <main className="min-h-svh bg-[radial-gradient(ellipse_at_top,#23275a_0%,#0b1026_42%,#050510_100%)] px-5 py-7 sm:px-10 sm:py-10">
+      <div className="mx-auto max-w-5xl">
+        <header className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium tracking-[0.3em] text-[#7bdff2]">UNIVERSE ARCHIVE</p>
+            <h1 className="mt-2 text-3xl font-semibold text-white">{user.nickname}님의 우주</h1>
+            <p className="mt-2 text-sm text-[#b8b8c8]">기록이 쌓인 해마다 하나의 우주가 만들어집니다.</p>
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0b1026]/70 p-2 backdrop-blur-xl">
+            <Link href="/diaries" className="rounded-xl px-3 py-2 text-sm text-[#d8d9e8] transition hover:bg-white/10 hover:text-white">목록으로 보기</Link>
+            <LogoutButton />
+          </div>
+        </header>
 
-      {stars.length === 0 && (
-        <div className="pointer-events-none absolute inset-x-4 top-1/2 z-10 -translate-y-1/2 text-center sm:left-1/2 sm:w-[30rem] sm:-translate-x-1/2">
-          <p className="text-xs font-medium tracking-[0.3em] text-[#7bdff2]">THE FIRST LIGHT</p>
-          <h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">아직 당신의 우주에는 별이 없어요.</h2>
-          <p className="mt-3 text-sm leading-6 text-[#c9cada]">오늘의 첫 번째 기록으로 가장 먼저 빛나는 별을 만들어보세요.</p>
-        </div>
-      )}
-
-      <header className="absolute inset-x-0 top-0 z-10 flex items-start justify-between p-4 sm:p-6">
-        <div className="rounded-2xl border border-white/10 bg-[#080b20]/65 px-4 py-3 shadow-2xl backdrop-blur-xl sm:px-5">
-          <p className="text-xs font-medium tracking-[0.24em] text-[#7bdff2]">MY UNIVERSE</p>
-          <h1 className="mt-1 text-lg font-semibold text-white sm:text-xl">{user.nickname}님의 우주</h1>
-          {galaxies.length > 0 && (
-            <p className="mt-2 text-xs text-[#c9b8ff]">
-              ✦ {galaxies[0].year}년 {galaxies[0].month}월의 은하수 완성
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#080b20]/65 p-2 shadow-2xl backdrop-blur-xl">
-          <Link href="/diaries" className="rounded-xl px-3 py-2 text-sm text-[#d8d9e8] transition hover:bg-white/10 hover:text-white">
-            목록으로 보기
-          </Link>
-          <Link href="/" className="rounded-xl px-3 py-2 text-sm text-[#d8d9e8] transition hover:bg-white/10 hover:text-white">
-            메인으로
-          </Link>
-          <LogoutButton />
-        </div>
-      </header>
-
-      <section className="absolute bottom-5 left-4 z-10 max-w-sm rounded-3xl border border-white/10 bg-[#080b20]/70 p-5 shadow-2xl backdrop-blur-xl sm:bottom-7 sm:left-7 sm:p-6">
-        <p className="text-sm leading-6 text-[#c9cada]">
-          {todayDiary ? "오늘의 별이 이미 당신의 우주에 떠올랐어요." : "오늘의 별이 아직 떠오르지 않았어요."}
-        </p>
-        <Link
-          href={todayDiary ? `/diary/${todayDiary.id}` : "/diary/new"}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#ffd166] px-4 py-3 text-sm font-semibold text-[#171424] shadow-[0_0_28px_rgba(255,209,102,0.3)] transition hover:-translate-y-0.5 hover:bg-[#ffe29a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffd166]"
-        >
-          {todayDiary ? "오늘의 다이어리 보기" : "오늘의 별 만들기"}
-          <span aria-hidden="true">→</span>
-        </Link>
-      </section>
-
-      <aside className="pointer-events-none absolute bottom-5 right-5 z-10 hidden rounded-2xl border border-white/10 bg-[#080b20]/55 px-4 py-3 text-xs leading-5 text-white/55 backdrop-blur-xl sm:block">
-        <p className="font-medium tracking-[0.18em] text-[#9fb4ff]">DEEP SPACE</p>
-        <p className="mt-1">드래그해 성계 사이를 항해하고,</p>
-        <p>스크롤해 심우주를 확대·축소하세요.</p>
-      </aside>
+        <section className="mt-12 grid gap-5 sm:grid-cols-2">
+          {universes.map(([year, summary]) => (
+            <Link key={year} href={`/universe/${year}`} className="group relative overflow-hidden rounded-3xl border border-white/10 bg-[#0b1026]/70 p-7 shadow-2xl transition hover:-translate-y-1 hover:border-[#b8a1ff]/50 hover:bg-[#12183a]">
+              <div aria-hidden="true" className="absolute -right-12 -top-12 size-40 rounded-full bg-[#b8a1ff]/15 blur-2xl transition group-hover:bg-[#7bdff2]/20" />
+              <p className="relative text-xs font-medium tracking-[0.25em] text-[#7bdff2]">YEARLY UNIVERSE</p>
+              <h2 className="relative mt-5 text-4xl font-semibold text-white">{year}년 우주</h2>
+              <div className="relative mt-8 flex gap-5 text-sm text-[#c6c8da]">
+                <span>별 {summary.diaryCount}개</span>
+                <span>은하수 {summary.galaxyCount}개</span>
+              </div>
+              <p className="relative mt-8 text-sm font-medium text-[#ffd166]">우주 탐험하기 →</p>
+            </Link>
+          ))}
+        </section>
+      </div>
     </main>
   );
 }
