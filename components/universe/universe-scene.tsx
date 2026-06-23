@@ -195,13 +195,13 @@ function disposeDeepSpaceSector(sector: THREE.Group) {
   });
 }
 
-export function UniverseScene({ stars, galaxies }: { stars: SceneStar[]; galaxies: Galaxy[] }) {
+export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; galaxies: Galaxy[]; year: number }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const galaxyFocusRef = useRef<{ year: number; month: number } | null>(null);
   const router = useRouter();
   const [hoveredStar, setHoveredStar] = useState<HoveredStar | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-  const navigationYear = galaxies.reduce((latest, galaxy) => Math.max(latest, galaxy.year), new Date().getUTCFullYear());
+  const navigationYear = year;
   const completedMonths = new Set(galaxies.filter((galaxy) => galaxy.year === navigationYear).map((galaxy) => galaxy.month));
 
   function focusGalaxy(month: number) {
