@@ -20,7 +20,36 @@ function seededNumber(value: string) {
 }
 
 function starPosition(star: SceneStar) {
-  return new THREE.Vector3(star.x / 180, -star.y / 180, (seededNumber(star.id) - 0.5) * 11);
+  const month = new Date(star.diaryDate).getUTCMonth() + 1;
+  const monthDepth = -5 + (month - 6.5) * 0.18;
+  return new THREE.Vector3(star.x / 180, -star.y / 180, monthDepth + (seededNumber(star.id) - 0.5) * 0.8);
+}
+
+function createGalaxyDustStream(curve: THREE.CatmullRomCurve3, seed: string, count: number, width: number, size: number, opacity: number) {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const lavender = new THREE.Color("#c8c1ff");
+  const blue = new THREE.Color("#89b9e8");
+  const color = new THREE.Color();
+  for (let index = 0; index < count; index += 1) {
+    const t = seededNumber(`${seed}-path-${index}`);
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t).normalize();
+    const normal = new THREE.Vector3(-tangent.y, tangent.x, 0).normalize();
+    const spread = (seededNumber(`${seed}-spread-a-${index}`) + seededNumber(`${seed}-spread-b-${index}`) + seededNumber(`${seed}-spread-c-${index}`) - 1.5) * width;
+    const along = (seededNumber(`${seed}-along-${index}`) - 0.5) * 0.24;
+    positions[index * 3] = point.x + normal.x * spread + tangent.x * along;
+    positions[index * 3 + 1] = point.y + normal.y * spread + tangent.y * along;
+    positions[index * 3 + 2] = point.z + (seededNumber(`${seed}-depth-${index}`) - 0.5) * width * 0.34;
+    color.copy(lavender).lerp(blue, seededNumber(`${seed}-color-${index}`));
+    colors[index * 3] = color.r;
+    colors[index * 3 + 1] = color.g;
+    colors[index * 3 + 2] = color.b;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  return new THREE.Points(geometry, new THREE.PointsMaterial({ size, vertexColors: true, transparent: true, opacity, depthWrite: false }));
 }
 
 function createGlowTexture() {
@@ -354,26 +383,13 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
         return date.getUTCFullYear() === galaxy.year && date.getUTCMonth() + 1 === galaxy.month;
       }).sort((left, right) => left.diaryDate.localeCompare(right.diaryDate)).map(starPosition);
       if (points.length < 2) continue;
-      const curve = new THREE.CatmullRomCurve3(points);
+      const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.3);
       const center = points.reduce((total, point) => total.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
       galaxyTargets.set(`${galaxy.year}-${galaxy.month}`, center);
-      const ribbon = new THREE.Mesh(
-        new THREE.TubeGeometry(curve, Math.max(80, points.length * 7), 0.065, 8, false),
-        new THREE.MeshBasicMaterial({ color: "#b8a1ff", transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }),
-      );
-      deepSpace.add(ribbon);
-
-      const dustPositions = new Float32Array(520 * 3);
-      const sampled = curve.getPoints(180);
-      for (let index = 0; index < 520; index += 1) {
-        const base = sampled[Math.floor(seededNumber(`${galaxy.id}-dust-path-${index}`) * sampled.length)];
-        dustPositions[index * 3] = base.x + (seededNumber(`${galaxy.id}-dust-x-${index}`) - 0.5) * 1.5;
-        dustPositions[index * 3 + 1] = base.y + (seededNumber(`${galaxy.id}-dust-y-${index}`) - 0.5) * 0.72;
-        dustPositions[index * 3 + 2] = base.z + (seededNumber(`${galaxy.id}-dust-z-${index}`) - 0.5) * 1.6;
-      }
-      const dustGeometry = new THREE.BufferGeometry();
-      dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
-      deepSpace.add(new THREE.Points(dustGeometry, new THREE.PointsMaterial({ size: 0.065, color: "#d8ccff", transparent: true, opacity: 0.45, depthWrite: false })));
+      const spine = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(90, points.length * 9)));
+      deepSpace.add(new THREE.Line(spine, new THREE.LineBasicMaterial({ color: "#b6a9df", transparent: true, opacity: 0.1, depthWrite: false })));
+      deepSpace.add(createGalaxyDustStream(curve, `${galaxy.id}-outer`, 1150, 1.15, 0.045, 0.24));
+      deepSpace.add(createGalaxyDustStream(curve, `${galaxy.id}-core`, 320, 0.3, 0.075, 0.42));
     }
 
     const raycaster = new THREE.Raycaster();
