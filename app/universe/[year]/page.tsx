@@ -27,7 +27,7 @@ export default async function YearUniversePage({ params }: { params: Promise<{ y
       })
       : null,
   ]);
-  const sceneStars = stars.map((star) => ({ id: star.id, diaryId: star.diary.id, title: star.diary.title, diaryDate: star.diary.diaryDate.toISOString(), color: star.color, x: star.x, y: star.y }));
+  const sceneStars = stars.map((star) => ({ id: star.id, diaryId: star.diary.id, title: star.diary.title, diaryDate: star.diary.diaryDate.toISOString(), color: star.color, emotion: star.emotion, x: star.x, y: star.y }));
 
   return (
     <main className="relative flex min-h-svh overflow-hidden bg-[#02030b]">
