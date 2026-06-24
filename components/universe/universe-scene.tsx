@@ -69,6 +69,38 @@ function createGlowTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
+function createStellarFlareTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.Texture();
+  const center = 128;
+  const horizontal = context.createLinearGradient(0, center, canvas.width, center);
+  horizontal.addColorStop(0, "rgba(255,255,255,0)");
+  horizontal.addColorStop(0.46, "rgba(214,242,255,.04)");
+  horizontal.addColorStop(0.5, "rgba(255,255,255,.95)");
+  horizontal.addColorStop(0.54, "rgba(214,242,255,.04)");
+  horizontal.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = horizontal;
+  context.fillRect(0, center - 1.2, canvas.width, 2.4);
+  const vertical = context.createLinearGradient(center, 0, center, canvas.height);
+  vertical.addColorStop(0, "rgba(255,255,255,0)");
+  vertical.addColorStop(0.46, "rgba(214,242,255,.04)");
+  vertical.addColorStop(0.5, "rgba(255,255,255,.92)");
+  vertical.addColorStop(0.54, "rgba(214,242,255,.04)");
+  vertical.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = vertical;
+  context.fillRect(center - 1.2, 0, 2.4, canvas.height);
+  const core = context.createRadialGradient(center, center, 0, center, center, 25);
+  core.addColorStop(0, "rgba(255,255,255,1)");
+  core.addColorStop(0.15, "rgba(235,249,255,.95)");
+  core.addColorStop(1, "rgba(200,232,255,0)");
+  context.fillStyle = core;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
 function createPlanetSurfaceTexture(seed: string, baseColor: string, gasGiant: boolean) {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
@@ -144,7 +176,7 @@ function createStarField(count: number, spread: number, seed: string) {
 }
 
 function createDiaryStarGeometry() {
-  return new THREE.IcosahedronGeometry(0.44, 3);
+  return new THREE.SphereGeometry(0.25, 20, 20);
 }
 
 function createDeepSpaceSector(x: number, y: number) {
@@ -245,6 +277,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.18, 0.42, 0.68));
 
     const glowTexture = createGlowTexture();
+    const stellarFlareTexture = createStellarFlareTexture();
     const universe = new THREE.Group();
     scene.add(universe);
     const farStars = createStarField(2800, 105, "far");
@@ -331,32 +364,32 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     for (const star of stars) {
       const position = starPosition(star);
       const starColor = EMOTION_STAR_COLORS[star.emotion as EmotionKey] ?? star.color;
-      const core = new THREE.Mesh(diaryStarGeometry, new THREE.MeshStandardMaterial({ color: starColor, emissive: starColor, emissiveIntensity: 0.85, roughness: 0.28, metalness: 0.18 }));
+      const core = new THREE.Mesh(diaryStarGeometry, new THREE.MeshStandardMaterial({ color: "#f5fbff", emissive: starColor, emissiveIntensity: 0.52, roughness: 0.3, metalness: 0.04 }));
       core.position.copy(position);
       core.rotation.z = seededNumber(`rotation-${star.id}`) * Math.PI * 2;
       core.userData.diaryId = star.diaryId;
       core.userData.title = star.title;
       core.userData.diaryDate = star.diaryDate;
-      core.userData.baseScale = 0.8 + seededNumber(star.id) * 0.5;
+      core.userData.baseScale = 0.62 + seededNumber(star.id) * 0.3;
       core.scale.setScalar(core.userData.baseScale as number);
       pickableStars.push(core);
       diaryStars.push(core);
       deepSpace.add(core);
-      const innerCore = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 20), new THREE.MeshBasicMaterial({ color: "#fff8e8", transparent: true, opacity: 0.92 }));
+      const innerCore = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.95 }));
       innerCore.position.copy(position);
       deepSpace.add(innerCore);
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: starColor, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture, color: starColor, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.position.copy(position);
-      halo.userData.baseScale = 2.35;
+      halo.userData.baseScale = 1.85;
       halo.scale.setScalar(halo.userData.baseScale as number);
       diaryHalos.push(halo);
       deepSpace.add(halo);
-      const orbit = new THREE.Mesh(new THREE.TorusGeometry(0.72 + seededNumber(`orbit-${star.id}`) * 0.18, 0.012, 8, 48), new THREE.MeshBasicMaterial({ color: starColor, transparent: true, opacity: 0.34, blending: THREE.AdditiveBlending, depthWrite: false }));
-      orbit.position.copy(position);
-      orbit.rotation.set(0.9 + seededNumber(`orbit-tilt-${star.id}`) * 0.5, seededNumber(`orbit-y-${star.id}`) * Math.PI, seededNumber(`orbit-z-${star.id}`) * Math.PI);
-      orbit.userData.baseScale = core.userData.baseScale;
-      diaryStars.push(orbit);
-      deepSpace.add(orbit);
+      const flare = new THREE.Sprite(new THREE.SpriteMaterial({ map: stellarFlareTexture, color: "#d9f3ff", transparent: true, opacity: 0.34, blending: THREE.AdditiveBlending, depthWrite: false }));
+      flare.position.copy(position);
+      flare.userData.baseScale = 1.35 + seededNumber(`flare-${star.id}`) * 0.35;
+      flare.scale.setScalar(flare.userData.baseScale as number);
+      diaryHalos.push(flare);
+      deepSpace.add(flare);
       const hitArea = new THREE.Mesh(diaryStarHitGeometry, diaryStarHitMaterial);
       hitArea.position.copy(position);
       hitArea.userData.diaryId = star.diaryId;
@@ -364,7 +397,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
       hitArea.userData.diaryDate = star.diaryDate;
       pickableStars.push(hitArea);
       deepSpace.add(hitArea);
-      const light = new THREE.PointLight(starColor, 2.1, 8);
+      const light = new THREE.PointLight(starColor, 1.25, 5.5);
       light.position.copy(position);
       deepSpace.add(light);
     }
@@ -509,6 +542,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
         if (object instanceof THREE.Sprite) object.material.dispose();
       });
       glowTexture.dispose();
+      stellarFlareTexture.dispose();
       composer.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
