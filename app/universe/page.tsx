@@ -29,7 +29,6 @@ export default async function UniverseIndexPage() {
   return (
     <main className="relative min-h-svh overflow-hidden bg-[#03040e] px-5 py-6 sm:px-10 sm:py-10">
       <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_-15%,rgba(88,79,174,.46),transparent_48%),radial-gradient(ellipse_at_0%_60%,rgba(37,102,142,.18),transparent_34%)]" />
-      <div aria-hidden="true" className="absolute inset-0 opacity-50 [background-image:radial-gradient(circle_at_center,rgba(255,255,255,.8)_0_1px,transparent_1.2px)] [background-size:39px_41px]" />
       <div className="relative mx-auto max-w-6xl">
         <header className="flex items-center justify-between gap-4 border-b border-white/10 pb-6 sm:pb-8">
           <div>
