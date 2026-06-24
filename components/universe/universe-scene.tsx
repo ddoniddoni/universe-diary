@@ -13,6 +13,8 @@ type Galaxy = { id: string; year: number; month: number };
 type HoveredStar = { title: string; diaryDate: string; x: number; y: number };
 
 const dateLabelFormatter = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" });
+const CLOSEST_READING_ZOOM = 8;
+const GALAXY_FOCUS_ZOOM = 12;
 
 function seededNumber(value: string) {
   let hash = 2166136261;
@@ -249,7 +251,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
   function focusGalaxy(month: number) {
     if (!completedMonths.has(month)) return;
     galaxyFocusRef.current = { year: navigationYear, month };
-    requestedZoomRef.current = 22;
+    requestedZoomRef.current = GALAXY_FOCUS_ZOOM;
     setSelectedMonth(month);
   }
 
@@ -356,7 +358,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     };
     updateSectors();
     const diaryStarGeometry = createDiaryStarGeometry();
-    const diaryStarHitGeometry = new THREE.SphereGeometry(0.72, 12, 12);
+    const diaryStarHitGeometry = new THREE.SphereGeometry(1.45, 16, 16);
     const diaryStarHitMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     const pickableStars: THREE.Object3D[] = [];
     const diaryStars: THREE.Mesh[] = [];
@@ -466,7 +468,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.018, 22, 50);
+      zoom = THREE.MathUtils.clamp(zoom + event.deltaY * 0.018, CLOSEST_READING_ZOOM, 50);
     };
     const onResize = () => { camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); composer.setSize(mount.clientWidth, mount.clientHeight); };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
@@ -500,7 +502,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
       nearStars.rotation.y = -elapsed * 0.05;
       milkyWay.rotation.y = -0.55 + elapsed * 0.035;
       nebulae.rotation.z = elapsed * 0.018;
-      const closeScale = THREE.MathUtils.clamp((camera.position.z - 10) / 22, 0.5, 1);
+      const closeScale = 1;
       diaryStars.forEach((star, index) => {
         star.rotation.z += 0.0008 + (index % 3) * 0.00015;
         star.scale.setScalar((star.userData.baseScale as number) * closeScale);
