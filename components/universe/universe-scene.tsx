@@ -15,6 +15,7 @@ type HoveredStar = { title: string; diaryDate: string; x: number; y: number };
 const dateLabelFormatter = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" });
 const CLOSEST_READING_ZOOM = 8;
 const GALAXY_FOCUS_ZOOM = 12;
+const MINIMUM_VISUAL_STAR_DISTANCE = 2.7;
 
 function seededNumber(value: string) {
   let hash = 2166136261;
@@ -26,6 +27,24 @@ function starPosition(star: SceneStar) {
   const month = new Date(star.diaryDate).getUTCMonth() + 1;
   const monthDepth = -5 + (month - 6.5) * 0.18;
   return new THREE.Vector3(star.x / 180, -star.y / 180, monthDepth + (seededNumber(star.id) - 0.5) * 0.8);
+}
+
+function resolveStarPositions(stars: SceneStar[]) {
+  const resolved = new Map<string, THREE.Vector3>();
+  const sortedStars = [...stars].sort((left, right) => left.diaryDate.localeCompare(right.diaryDate));
+  for (const star of sortedStars) {
+    const origin = starPosition(star);
+    let candidate = origin.clone();
+    let attempt = 0;
+    while ([...resolved.values()].some((position) => position.distanceTo(candidate) < MINIMUM_VISUAL_STAR_DISTANCE) && attempt < 36) {
+      const angle = seededNumber(`${star.id}-spacing-angle-${attempt}`) * Math.PI * 2;
+      const radius = MINIMUM_VISUAL_STAR_DISTANCE + attempt * 0.28;
+      candidate = origin.clone().add(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0));
+      attempt += 1;
+    }
+    resolved.set(star.id, candidate);
+  }
+  return resolved;
 }
 
 function createGalaxyDustStream(curve: THREE.CatmullRomCurve3, seed: string, count: number, width: number, size: number, opacity: number) {
@@ -174,7 +193,7 @@ function createStarField(count: number, spread: number, seed: string) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  return new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.14, vertexColors: true, transparent: true, opacity: 0.66, depthWrite: false }));
+  return new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.11, vertexColors: true, transparent: true, opacity: 0.38, depthWrite: false }));
 }
 
 function createDiaryStarGeometry() {
@@ -276,15 +295,15 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.18, 0.42, 0.68));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(mount.clientWidth, mount.clientHeight), 0.08, 0.3, 0.9));
 
     const glowTexture = createGlowTexture();
     const stellarFlareTexture = createStellarFlareTexture();
     const universe = new THREE.Group();
     scene.add(universe);
-    const farStars = createStarField(2800, 105, "far");
-    const nearStars = createStarField(850, 55, "near");
-    nearStars.material.size = 0.2;
+    const farStars = createStarField(1550, 105, "far");
+    const nearStars = createStarField(360, 55, "near");
+    nearStars.material.size = 0.14;
     universe.add(farStars, nearStars);
 
     const milkyWay = new THREE.Group();
@@ -305,7 +324,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     const milkyGeometry = new THREE.BufferGeometry();
     milkyGeometry.setAttribute("position", new THREE.BufferAttribute(milkyPositions, 3));
     milkyGeometry.setAttribute("color", new THREE.BufferAttribute(milkyColors, 3));
-    milkyWay.add(new THREE.Points(milkyGeometry, new THREE.PointsMaterial({ size: 0.22, vertexColors: true, transparent: true, opacity: 0.25, depthWrite: false })));
+    milkyWay.add(new THREE.Points(milkyGeometry, new THREE.PointsMaterial({ size: 0.14, vertexColors: true, transparent: true, opacity: 0.1, depthWrite: false })));
     milkyWay.rotation.set(0.45, -0.55, -0.26);
     universe.add(milkyWay);
 
@@ -330,6 +349,7 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     const sectors = new Map<string, THREE.Group>();
     const orbitPivots = new Set<THREE.Group>();
     const galaxyTargets = new Map<string, THREE.Vector3>();
+    const visualStarPositions = resolveStarPositions(stars);
     const sectorSize = 42;
     const updateSectors = () => {
       const centerX = Math.round(-deepSpace.position.x / sectorSize);
@@ -358,13 +378,13 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     };
     updateSectors();
     const diaryStarGeometry = createDiaryStarGeometry();
-    const diaryStarHitGeometry = new THREE.SphereGeometry(1.45, 16, 16);
+    const diaryStarHitGeometry = new THREE.SphereGeometry(1.05, 16, 16);
     const diaryStarHitMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     const pickableStars: THREE.Object3D[] = [];
     const diaryStars: THREE.Mesh[] = [];
     const diaryHalos: THREE.Sprite[] = [];
     for (const star of stars) {
-      const position = starPosition(star);
+      const position = visualStarPositions.get(star.id) ?? starPosition(star);
       const starColor = EMOTION_STAR_COLORS[star.emotion as EmotionKey] ?? star.color;
       const core = new THREE.Mesh(diaryStarGeometry, new THREE.MeshStandardMaterial({ color: "#f5fbff", emissive: starColor, emissiveIntensity: 0.52, roughness: 0.3, metalness: 0.04 }));
       core.position.copy(position);
@@ -408,15 +428,15 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
       const points = stars.filter((star) => {
         const date = new Date(star.diaryDate);
         return date.getUTCFullYear() === galaxy.year && date.getUTCMonth() + 1 === galaxy.month;
-      }).sort((left, right) => left.diaryDate.localeCompare(right.diaryDate)).map(starPosition);
+      }).sort((left, right) => left.diaryDate.localeCompare(right.diaryDate)).map((star) => visualStarPositions.get(star.id) ?? starPosition(star));
       if (points.length < 2) continue;
       const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.3);
       const center = points.reduce((total, point) => total.add(point), new THREE.Vector3()).multiplyScalar(1 / points.length);
       galaxyTargets.set(`${galaxy.year}-${galaxy.month}`, center);
       const spine = new THREE.BufferGeometry().setFromPoints(curve.getPoints(Math.max(90, points.length * 9)));
       deepSpace.add(new THREE.Line(spine, new THREE.LineBasicMaterial({ color: "#b6a9df", transparent: true, opacity: 0.1, depthWrite: false })));
-      deepSpace.add(createGalaxyDustStream(curve, `${galaxy.id}-outer`, 1150, 1.15, 0.045, 0.24));
-      deepSpace.add(createGalaxyDustStream(curve, `${galaxy.id}-core`, 320, 0.3, 0.075, 0.42));
+      deepSpace.add(createGalaxyDustStream(curve, `${galaxy.id}-outer`, 680, 1.15, 0.035, 0.1));
+      deepSpace.add(createGalaxyDustStream(curve, `${galaxy.id}-core`, 170, 0.3, 0.055, 0.18));
     }
 
     const raycaster = new THREE.Raycaster();
@@ -480,7 +500,6 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
     let frame = 0;
     const animate = () => {
       frame = requestAnimationFrame(animate);
-      const elapsed = performance.now() * 0.00008;
       const focusRequest = galaxyFocusRef.current;
       if (requestedZoomRef.current !== null) {
         zoom = requestedZoomRef.current;
@@ -498,10 +517,6 @@ export function UniverseScene({ stars, galaxies, year }: { stars: SceneStar[]; g
       }
       camera.position.z += (zoom - camera.position.z) * 0.08;
       camera.lookAt(0, 0, -4);
-      farStars.rotation.y = elapsed * 0.14;
-      nearStars.rotation.y = -elapsed * 0.05;
-      milkyWay.rotation.y = -0.55 + elapsed * 0.035;
-      nebulae.rotation.z = elapsed * 0.018;
       const closeScale = 1;
       diaryStars.forEach((star, index) => {
         star.rotation.z += 0.0008 + (index % 3) * 0.00015;
