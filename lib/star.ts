@@ -1,10 +1,10 @@
 export const EMOTION_STAR_COLORS = {
-  HAPPY: "#F1C46B",
-  CALM: "#72B8C8",
-  SAD: "#858AC5",
-  ANGRY: "#BD686C",
-  EXCITED: "#C582B2",
-  TIRED: "#A5AFBC",
+  HAPPY: "#F3D7A4",
+  CALM: "#A8DDE0",
+  SAD: "#B9C4EA",
+  ANGRY: "#E1A7A3",
+  EXCITED: "#E7BCD2",
+  TIRED: "#C7D1DB",
 } as const;
 
 export type EmotionKey = keyof typeof EMOTION_STAR_COLORS;
